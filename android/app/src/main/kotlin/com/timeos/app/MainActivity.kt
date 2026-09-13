@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,7 +52,10 @@ fun TimeOSApp() {
 
     if (granted) {
         val deviceId = remember { DeviceId.get(context) }
-        PermissionGrantedScreen(deviceId = deviceId)
+        // Run an immediate catch-up drain on entering the granted state (§8.4 mitigation #2),
+        // rather than waiting for the next periodic tick, so the diagnostic screen isn't empty.
+        LaunchedEffect(Unit) { CollectionScheduler.runCatchUpNow(context) }
+        DiagnosticScreen(deviceId = deviceId)
     } else {
         OnboardingScreen(
             onGrantClick = {

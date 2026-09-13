@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "TimeOS"
 include(":app")
+include(":core")

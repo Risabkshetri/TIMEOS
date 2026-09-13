@@ -3,15 +3,16 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      PRIVACY-CRITICAL FILE. See docs/TIMEOS_ENGINEERING_SPEC.md §8.2 and §35.
+      PRIVACY-CRITICAL FILE. See docs/TIMEOS_ENGINEERING_SPEC.md §8.2, §8.4, §35.
 
-      Phase 1A declares exactly one permission: PACKAGE_USAGE_STATS, which must be present in
-      the manifest for the OS to list this app under Settings > Usage Access, even though it is
-      granted via AppOpsManager rather than a runtime dialog.
+      Phase 1A added PACKAGE_USAGE_STATS, which must be present in the manifest for the OS to
+      list this app under Settings > Usage Access, even though it is granted via AppOpsManager
+      rather than a runtime dialog. Phase 1B adds RECEIVE_BOOT_COMPLETED so collection resumes
+      promptly after a reboot (§8.4 mitigation) rather than waiting for the next app launch.
 
-      This manifest intentionally does NOT declare (and test_manifest_privacy.py in
-      backend/../android tests enforce this at build time in a later phase):
-        INTERNET                          - no network access in Phase 1A/1B
+      This manifest intentionally does NOT declare (and ManifestPrivacyTest.kt enforces this at
+      build time):
+        INTERNET                          - no network access through Phase 1B
         READ_CONTACTS, READ_SMS           - never collected, ever
         READ_PHONE_STATE, READ_PHONE_NUMBERS, READ_PRIVILEGED_PHONE_STATE - no hardware/SIM
                                              identifiers; device identity is a generated UUID
@@ -24,8 +25,10 @@
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
+        android:name=".TimeOSApplication"
         android:allowBackup="false"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
@@ -41,5 +44,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

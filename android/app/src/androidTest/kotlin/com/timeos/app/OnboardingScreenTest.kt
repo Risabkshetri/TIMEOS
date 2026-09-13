@@ -8,11 +8,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Instrumented UI tests for the three onboarding states described in
+ * Instrumented UI tests for the onboarding states described in
  * docs/TIMEOS_ENGINEERING_SPEC.md §38 Phase 1A manual verification:
  *   1. "Usage Access not granted" (initial state)
- *   2. Granting shows the granted-state screen without an app restart
- *   3. Settings-open failure shows the manual-navigation fallback text
+ *   2. Settings-open failure shows the manual-navigation fallback text
+ *   3. The granted state (DiagnosticScreen, Phase 1B) shows the device ID
  *
  * Requires a connected device or emulator to run (./gradlew connectedDebugAndroidTest).
  */
@@ -43,9 +43,9 @@ class OnboardingScreenTest {
     }
 
     @Test
-    fun grantedScreen_showsDeviceId() {
+    fun diagnosticScreen_showsDeviceId() {
         composeTestRule.setContent {
-            PermissionGrantedScreen(deviceId = "test-device-id-1234")
+            DiagnosticScreen(deviceId = "test-device-id-1234")
         }
 
         composeTestRule.onNodeWithText("test-device-id-1234", substring = true).assertExists()
