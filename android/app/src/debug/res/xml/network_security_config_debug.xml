@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-build-only. Permits plain HTTP to localhost alone, so the app can reach a local mock
+  ingest server (tools/mock_ingest_server.py) via `adb reverse tcp:PORT tcp:PORT`. This file is
+  never packaged into a release build (see src/debug/AndroidManifest.xml) — release keeps the
+  main manifest's usesCleartextTraffic="false" with no exceptions, per
+  docs/TIMEOS_ENGINEERING_SPEC.md §28 (TLS 1.2+ only in production).
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

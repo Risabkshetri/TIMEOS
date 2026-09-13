@@ -10,19 +10,23 @@ data class CollectionHealth(
 )
 
 /**
- * Phase 1B's minimal local persistence contract. [PersistentEventStore] is the production
- * implementation (SharedPreferences + JSON). This is deliberately superseded by a proper Room
- * schema with a real pending-sync queue in Phase 2 (docs/TIMEOS_ENGINEERING_SPEC.md §38 Phase 2,
- * §8.8) — nothing here is meant to survive past validating the collection loop end to end.
+ * Local persistence contract for collected events. [com.timeos.core.db.RoomEventStore] is the
+ * production implementation as of Phase 2 (docs/TIMEOS_ENGINEERING_SPEC.md §38 Phase 2, §8.8),
+ * replacing Phase 1B's SharedPreferences-backed PersistentEventStore.
+ *
+ * All methods are suspend: Room's generated DAO implementations dispatch onto Room's own query
+ * executor, so callers (CollectionWorker's coroutine, DiagnosticScreen's LaunchedEffect) never
+ * block their own thread — notably the Compose main thread, which a synchronous call here would
+ * have blocked.
  */
 interface EventStore {
-    fun contains(eventId: String): Boolean
-    fun appendIfNew(events: List<TimeOSEvent>): Int
-    fun getRecent(limit: Int): List<TimeOSEvent>
-    fun getCursor(): Long?
-    fun setCursor(tsUtcMillis: Long)
-    fun nextSeq(): Long
-    fun recordPoll(atMillis: Long, appendedCount: Int)
-    fun recordPermissionLost(atMillis: Long)
-    fun health(): CollectionHealth
+    suspend fun contains(eventId: String): Boolean
+    suspend fun appendIfNew(events: List<TimeOSEvent>): Int
+    suspend fun getRecent(limit: Int): List<TimeOSEvent>
+    suspend fun getCursor(): Long?
+    suspend fun setCursor(tsUtcMillis: Long)
+    suspend fun nextSeq(): Long
+    suspend fun recordPoll(atMillis: Long, appendedCount: Int)
+    suspend fun recordPermissionLost(atMillis: Long)
+    suspend fun health(): CollectionHealth
 }

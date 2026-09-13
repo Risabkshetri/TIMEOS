@@ -8,6 +8,7 @@ class TimeOSApplication : Application() {
         super.onCreate()
         try {
             CollectionScheduler.ensureScheduled(this)
+            SyncScheduler.ensureScheduled(this)
         } catch (e: IllegalStateException) {
             // WorkManager's own ContentProvider auto-initializer normally runs before
             // Application.onCreate(), but some test harnesses (Robolectric) don't guarantee

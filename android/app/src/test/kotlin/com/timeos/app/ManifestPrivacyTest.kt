@@ -2,15 +2,17 @@ package com.timeos.app
 
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
 
 /**
- * Build-failing enforcement of docs/TIMEOS_ENGINEERING_SPEC.md §38 Phase 1A: the manifest must
- * declare Usage Access and nothing that could expose contacts, SMS, phone/hardware identifiers,
- * notification content, accessibility-service content, or the network in this phase.
+ * Build-failing enforcement of docs/TIMEOS_ENGINEERING_SPEC.md §35: the manifest must never
+ * declare anything that could expose contacts, SMS, phone/hardware identifiers, notification
+ * content, or accessibility-service content. INTERNET was forbidden through Phase 1A/1B (its
+ * absence was proof nothing left the device); Phase 2's sync client legitimately needs it, so it
+ * moved out of the forbidden set here rather than being removed from testing altogether — see
+ * `manifest declares INTERNET starting Phase 2` below and the AndroidManifest.xml doc comment.
  *
  * This is the Android-source mirror of backend/tests/test_privacy_isolation.py — a structural
  * check that fails the build the moment a forbidden permission is added, rather than relying on
@@ -31,7 +33,6 @@ class ManifestPrivacyTest {
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        "android.permission.INTERNET",
         "android.permission.READ_CALL_LOG",
         "android.permission.PROCESS_OUTGOING_CALLS",
     )
@@ -94,11 +95,11 @@ class ManifestPrivacyTest {
     }
 
     @Test
-    fun `manifest does not request INTERNET in phase 1A`() {
+    fun `manifest declares INTERNET starting Phase 2`() {
         val declared = declaredPermissions(loadManifest())
-        assertFalse(
-            "Phase 1A must not declare INTERNET — its absence is the strongest available " +
-                "proof that nothing leaves the device yet (spec §38 Phase 1A).",
+        assertTrue(
+            "Phase 2's sync client needs INTERNET to upload batches (§26); its absence would " +
+                "mean sync is silently non-functional.",
             declared.contains("android.permission.INTERNET"),
         )
     }

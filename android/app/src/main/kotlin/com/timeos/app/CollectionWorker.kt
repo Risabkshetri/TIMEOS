@@ -4,8 +4,9 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.timeos.core.collector.CollectionRunner
-import com.timeos.core.collector.PersistentEventStore
 import com.timeos.core.collector.UsageEventReader
+import com.timeos.core.db.RoomEventStore
+import com.timeos.core.db.TimeOSDatabase
 
 /**
  * WorkManager entry point for one collection cycle. Thin by design — all the actual logic lives
@@ -15,7 +16,7 @@ import com.timeos.core.collector.UsageEventReader
 class CollectionWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val deviceId = DeviceId.get(applicationContext)
-        val store = PersistentEventStore(applicationContext)
+        val store = RoomEventStore(TimeOSDatabase.getInstance(applicationContext))
         val source = UsageEventReader(applicationContext)
 
         val runner = CollectionRunner(

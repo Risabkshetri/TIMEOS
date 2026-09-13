@@ -4,6 +4,7 @@ import com.timeos.core.model.EventType
 import com.timeos.core.model.RawUsageEvent
 import com.timeos.core.model.TimeOSEvent
 import java.util.TimeZone
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -25,7 +26,8 @@ private class FakeTimeSource(private val wallClock: Long, private val elapsedRea
     override fun elapsedRealtimeMillis(): Long = elapsedRealtime
 }
 
-/** In-memory [EventStore] test double — the production store is [PersistentEventStore]. */
+/** In-memory [EventStore] test double — the production store is
+ * [com.timeos.core.db.RoomEventStore] as of Phase 2. */
 private class InMemoryEventStore : EventStore {
     private val events = LinkedHashMap<String, TimeOSEvent>()
     private var cursor: Long? = null
@@ -34,9 +36,9 @@ private class InMemoryEventStore : EventStore {
     private var lastPollAt: Long? = null
     private var lastPermissionLostAt: Long? = null
 
-    override fun contains(eventId: String) = events.containsKey(eventId)
+    override suspend fun contains(eventId: String) = events.containsKey(eventId)
 
-    override fun appendIfNew(events: List<TimeOSEvent>): Int {
+    override suspend fun appendIfNew(events: List<TimeOSEvent>): Int {
         var appended = 0
         for (e in events) {
             if (this.events.putIfAbsent(e.eventId, e) == null) appended++
@@ -44,22 +46,22 @@ private class InMemoryEventStore : EventStore {
         return appended
     }
 
-    override fun getRecent(limit: Int): List<TimeOSEvent> =
+    override suspend fun getRecent(limit: Int): List<TimeOSEvent> =
         events.values.sortedByDescending { it.tsUtcMillis }.take(limit)
 
-    override fun getCursor(): Long? = cursor
-    override fun setCursor(tsUtcMillis: Long) { cursor = tsUtcMillis }
-    override fun nextSeq(): Long = seqCounter++
-    override fun recordPoll(atMillis: Long, appendedCount: Int) {
+    override suspend fun getCursor(): Long? = cursor
+    override suspend fun setCursor(tsUtcMillis: Long) { cursor = tsUtcMillis }
+    override suspend fun nextSeq(): Long = seqCounter++
+    override suspend fun recordPoll(atMillis: Long, appendedCount: Int) {
         lastPollAt = atMillis
         pollTimestamps.add(atMillis)
     }
 
-    override fun recordPermissionLost(atMillis: Long) {
+    override suspend fun recordPermissionLost(atMillis: Long) {
         lastPermissionLostAt = atMillis
     }
 
-    override fun health() =
+    override suspend fun health() =
         CollectionHealth(lastPollAt, pollTimestamps.toList(), events.size, lastPermissionLostAt)
 }
 
@@ -68,7 +70,7 @@ class CollectionRunnerTest {
     private val tz: TimeZone = TimeZone.getTimeZone("UTC")
 
     @Test
-    fun `first run seeds from the initial lookback window and appends mapped events`() {
+    fun `first run seeds from the initial lookback window and appends mapped events`() = runTest {
         val source = FakeUsageEventSource()
         val now = 10_000_000L
         val eventTs = now - 1_000_000L // well within the 24h lookback default
@@ -91,7 +93,7 @@ class CollectionRunnerTest {
     }
 
     @Test
-    fun `re-querying an overlapping window does not duplicate events`() {
+    fun `re-querying an overlapping window does not duplicate events`() = runTest {
         val source = FakeUsageEventSource()
         val store = InMemoryEventStore()
         val eventTs = 1_000_000L
@@ -122,7 +124,7 @@ class CollectionRunnerTest {
     }
 
     @Test
-    fun `permission denied records permission lost and does not query the source`() {
+    fun `permission denied records permission lost and does not query the source`() = runTest {
         var queried = false
         val source = object : UsageEventSource {
             override fun queryRawEvents(fromMillis: Long, toMillis: Long): List<RawUsageEvent> {
@@ -147,7 +149,7 @@ class CollectionRunnerTest {
     }
 
     @Test
-    fun `cursor never moves backward across runs`() {
+    fun `cursor never moves backward across runs`() = runTest {
         val source = FakeUsageEventSource()
         val store = InMemoryEventStore()
         source.seed(RawUsageEvent("com.a", 2_000_000L, EventType.APP_FOREGROUND))

@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,21 +30,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.timeos.core.collector.AppActivitySummary
 import com.timeos.core.collector.CollectionHealth
 import com.timeos.core.collector.CoverageTracker
 import com.timeos.core.collector.LocalSession
-import com.timeos.core.collector.PersistentEventStore
+import com.timeos.core.db.RoomEventStore
+import com.timeos.core.db.TimeOSDatabase
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
 
 /**
- * Phase 1B's collection diagnostic screen: proves UsageStatsManager returns real data and that
- * it survives restarts (docs/TIMEOS_ENGINEERING_SPEC.md §38 Phase 1B). Supersedes Phase 1A's
- * PermissionGrantedScreen.
+ * Collection + sync diagnostic screen (docs/TIMEOS_ENGINEERING_SPEC.md §38 Phase 1B, Phase 2).
+ * Supersedes Phase 1A's PermissionGrantedScreen.
  */
 @Composable
 fun DiagnosticScreen(deviceId: String) {
@@ -50,15 +53,27 @@ fun DiagnosticScreen(deviceId: String) {
     var health by remember { mutableStateOf<CollectionHealth?>(null) }
     var sessions by remember { mutableStateOf<List<LocalSession>>(emptyList()) }
     var appSummary by remember { mutableStateOf<List<AppActivitySummary>>(emptyList()) }
+    var syncStatus by remember { mutableStateOf<SyncStatusUi?>(null) }
     var refreshTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(refreshTick) {
-        val store = PersistentEventStore(context)
+        val db = TimeOSDatabase.getInstance(context)
+        val store = RoomEventStore(db)
         health = store.health()
         val events = store.getRecent(500)
         val now = System.currentTimeMillis()
         sessions = CoverageTracker.buildSessions(events, now).take(30)
         appSummary = CoverageTracker.summarizeByPackage(events, now).take(15)
+
+        val meta = db.syncMetaDao().get()
+        syncStatus = SyncStatusUi(
+            unsyncedCount = db.eventDao().countUnsynced(),
+            pendingBatches = db.syncBatchDao().pendingCount(),
+            quarantinedBatches = db.syncBatchDao().quarantinedCount(),
+            lastSyncAttemptAtMillis = meta?.lastSyncAttemptAtMillis,
+            lastSyncResult = meta?.lastSyncResult,
+            baseUrl = SyncConfig.getBaseUrl(context),
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -97,6 +112,9 @@ fun DiagnosticScreen(deviceId: String) {
             }
 
             Spacer(Modifier.height(20.dp))
+            SyncPanel(syncStatus, onRefresh = { refreshTick++ })
+
+            Spacer(Modifier.height(20.dp))
             Text("App activity (raw, last 500 events)", style = MaterialTheme.typography.titleMedium)
             Text(
                 text = "Every recorded open, including brief ones under 3s that the session " +
@@ -122,6 +140,71 @@ fun DiagnosticScreen(deviceId: String) {
                 )
             } else {
                 sessions.forEach { session -> SessionRow(context, session) }
+            }
+        }
+    }
+}
+
+private data class SyncStatusUi(
+    val unsyncedCount: Int,
+    val pendingBatches: Int,
+    val quarantinedBatches: Int,
+    val lastSyncAttemptAtMillis: Long?,
+    val lastSyncResult: String?,
+    val baseUrl: String?,
+)
+
+@Composable
+private fun SyncPanel(status: SyncStatusUi?, onRefresh: () -> Unit) {
+    val context = LocalContext.current
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    var urlField by remember(status?.baseUrl) { mutableStateOf(status?.baseUrl ?: "") }
+    var tokenField by remember { mutableStateOf(DeviceToken.get(context) ?: "") }
+
+    Text("Sync", style = MaterialTheme.typography.titleMedium)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+            .padding(16.dp),
+    ) {
+        Text("Unsynced events: ${status?.unsyncedCount ?: 0}")
+        Text("Pending batches: ${status?.pendingBatches ?: 0}")
+        Text("Quarantined batches: ${status?.quarantinedBatches ?: 0}")
+        Text(
+            "Last sync attempt: " +
+                (status?.lastSyncAttemptAtMillis?.let { timeFormat.format(Date(it)) } ?: "never"),
+        )
+        Text("Last result: ${status?.lastSyncResult ?: "—"}")
+
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = urlField,
+            onValueChange = { urlField = it },
+            label = { Text("Server URL (e.g. http://127.0.0.1:8089 via adb reverse)") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = tokenField,
+            onValueChange = { tokenField = it },
+            label = { Text("Device token (dev/testing only — real enrollment is Phase 3)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        Row {
+            Button(onClick = {
+                SyncConfig.setBaseUrl(context, urlField.trim())
+                DeviceToken.set(context, tokenField.trim())
+                onRefresh()
+            }) {
+                Text("Save config")
+            }
+            Spacer(Modifier.width(12.dp))
+            Button(onClick = { SyncScheduler.runNow(context) }) {
+                Text("Sync now")
             }
         }
     }

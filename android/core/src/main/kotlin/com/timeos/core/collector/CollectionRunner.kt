@@ -27,7 +27,7 @@ class CollectionRunner(
     private val initialLookbackMillis: Long = TimeUnit.HOURS.toMillis(24),
     private val overlapMillis: Long = TimeUnit.MINUTES.toMillis(5),
 ) {
-    fun runOnce(): CollectionRunResult {
+    suspend fun runOnce(): CollectionRunResult {
         val now = timeSource.wallClockMillis()
 
         if (!isUsageAccessGranted()) {

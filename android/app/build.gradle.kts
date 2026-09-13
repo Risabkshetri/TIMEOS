@@ -17,8 +17,8 @@ android {
         // available, which TimeOS must never rely on regardless (see DeviceId.kt).
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-phase1a"
+        versionCode = 2
+        versionName = "0.2.0-phase2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -73,6 +73,15 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     // EncryptedSharedPreferences (AndroidKeystore-backed) for the device ID — see DeviceId.kt.
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Referenced directly (TimeOSDatabase.getInstance, withTransaction), not just transitively
+    // via :core, which declares Room as `implementation` rather than `api`.
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+
+    // OkHttpIngestApiClient's default `client: OkHttpClient = OkHttpClient()` parameter compiles
+    // into every call site, so this needs to be on :app's own classpath, not just :core's.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14")

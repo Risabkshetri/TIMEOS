@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-variant manifest overlay, merged only into debug builds. Adds a network security config
+  permitting cleartext HTTP to 127.0.0.1/localhost alone (for the local mock ingest server) —
+  release builds never see this file and keep the main manifest's usesCleartextTraffic="false"
+  unconditionally (§28).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/network_security_config_debug" />
+</manifest>
