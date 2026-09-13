@@ -5,7 +5,8 @@
 services:
   db:
     ports:
-      - "127.0.0.1:5432:5432"
+      # Host 5432 is often already taken by another local project's Postgres; 5434 avoids that.
+      - "127.0.0.1:5434:5432"
 
   api:
     ports:
