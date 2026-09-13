@@ -85,6 +85,31 @@ class CoverageTrackerTest {
     }
 
     @Test
+    fun `rapid sub-3s bursts of the same app are invisible in buildSessions but appear in summarizeByPackage`() {
+        // Reproduces a real observation: an app opened for quick glances (each dwell under the
+        // 3s noise floor), interleaved with switches back to the launcher. Every individual
+        // dwell is filtered as noise, so the app has zero entries in buildSessions() even though
+        // it has real, frequent activity — summarizeByPackage() must still surface it.
+        val events = listOf(
+            event(EventType.APP_FOREGROUND, 0L, "com.whatsapp"),
+            event(EventType.APP_BACKGROUND, 1_500L, "com.whatsapp"),
+            event(EventType.APP_FOREGROUND, 40_000L, "com.launcher"),
+            event(EventType.APP_BACKGROUND, 41_000L, "com.launcher"),
+            event(EventType.APP_FOREGROUND, 42_000L, "com.whatsapp"),
+            event(EventType.APP_BACKGROUND, 43_800L, "com.whatsapp"),
+            event(EventType.APP_FOREGROUND, 80_000L, "com.launcher"),
+        )
+
+        val sessions = CoverageTracker.buildSessions(events, nowMillis = 100_000L)
+        assertTrue(sessions.none { it.packageName == "com.whatsapp" })
+
+        val summary = CoverageTracker.summarizeByPackage(events, nowMillis = 100_000L)
+        val whatsapp = summary.first { it.packageName == "com.whatsapp" }
+        assertEquals(2, whatsapp.openCount)
+        assertEquals(1_500L + 1_800L, whatsapp.totalMillis)
+    }
+
+    @Test
     fun `runaway session is truncated at the 4 hour cap`() {
         val fourHoursMillis = 4 * 60 * 60 * 1000L
         val events = listOf(event(EventType.APP_FOREGROUND, 0L, "com.a"))

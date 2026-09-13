@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.timeos.core.collector.AppActivitySummary
 import com.timeos.core.collector.CollectionHealth
 import com.timeos.core.collector.CoverageTracker
 import com.timeos.core.collector.LocalSession
@@ -48,13 +49,16 @@ fun DiagnosticScreen(deviceId: String) {
     val context = LocalContext.current
     var health by remember { mutableStateOf<CollectionHealth?>(null) }
     var sessions by remember { mutableStateOf<List<LocalSession>>(emptyList()) }
+    var appSummary by remember { mutableStateOf<List<AppActivitySummary>>(emptyList()) }
     var refreshTick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(refreshTick) {
         val store = PersistentEventStore(context)
         health = store.health()
         val events = store.getRecent(500)
-        sessions = CoverageTracker.buildSessions(events, System.currentTimeMillis()).take(30)
+        val now = System.currentTimeMillis()
+        sessions = CoverageTracker.buildSessions(events, now).take(30)
+        appSummary = CoverageTracker.summarizeByPackage(events, now).take(15)
     }
 
     LaunchedEffect(Unit) {
@@ -93,7 +97,23 @@ fun DiagnosticScreen(deviceId: String) {
             }
 
             Spacer(Modifier.height(20.dp))
-            Text("Recent sessions", style = MaterialTheme.typography.titleMedium)
+            Text("App activity (raw, last 500 events)", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "Every recorded open, including brief ones under 3s that the session " +
+                    "view below filters out as noise. If an app you used doesn't show up here, " +
+                    "it genuinely wasn't observed — if it shows up here but not below, it was " +
+                    "used only in quick bursts.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            if (appSummary.isEmpty()) {
+                Text("No app activity recorded yet.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                appSummary.forEach { summary -> AppSummaryRow(context, summary) }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Text("Recent sessions (≥3s, filtered)", style = MaterialTheme.typography.titleMedium)
             if (sessions.isEmpty()) {
                 Text(
                     text = "No usage sessions recorded yet.",
@@ -105,6 +125,17 @@ fun DiagnosticScreen(deviceId: String) {
             }
         }
     }
+}
+
+@Composable
+private fun AppSummaryRow(context: Context, summary: AppActivitySummary) {
+    val label = remember(summary.packageName) { appLabel(context, summary.packageName) }
+    val durationText = remember(summary.totalMillis) { formatDuration(summary.totalMillis) }
+    Text(
+        text = "$label — $durationText total, ${summary.openCount}x opened",
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(vertical = 3.dp),
+    )
 }
 
 @Composable
