@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TimeOS</string>
+
+    <string name="onboarding_title">Why TimeOS needs Usage Access</string>
+    <string name="onboarding_body">TimeOS reconstructs how you actually spend your day by
+reading which apps are in the foreground and for how long — the same information Android\'s
+own Digital Wellbeing screen uses.\n\nUsage Access lets TimeOS see app names and timestamps
+only. It cannot see message content, contacts, notifications, passwords, screenshots, or what
+you type. Everything stays on this device unless you later choose to sync it to your own
+server.\n\nThis permission cannot be granted from a normal pop-up — Android requires it to be
+turned on from a dedicated settings screen.</string>
+    <string name="grant_button">Open Usage Access Settings</string>
+    <string name="find_in_list_hint">Look for \"TimeOS\" in the list and turn it on.</string>
+
+    <string name="status_granted">Usage Access is granted.</string>
+    <string name="status_not_granted">Usage Access is not granted yet.</string>
+    <string name="status_checking">Checking permission status…</string>
+
+    <string name="settings_open_failed">Couldn\'t open the settings screen automatically.
+Please open Settings → Security and privacy → More privacy settings → Usage data access,
+then find TimeOS in the list.</string>
+</resources>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      PRIVACY-CRITICAL FILE. See docs/TIMEOS_ENGINEERING_SPEC.md §8.2 and §35.
+
+      Phase 1A declares exactly one permission: PACKAGE_USAGE_STATS, which must be present in
+      the manifest for the OS to list this app under Settings > Usage Access, even though it is
+      granted via AppOpsManager rather than a runtime dialog.
+
+      This manifest intentionally does NOT declare (and test_manifest_privacy.py in
+      backend/../android tests enforce this at build time in a later phase):
+        INTERNET                          - no network access in Phase 1A/1B
+        READ_CONTACTS, READ_SMS           - never collected, ever
+        READ_PHONE_STATE, READ_PHONE_NUMBERS, READ_PRIVILEGED_PHONE_STATE - no hardware/SIM
+                                             identifiers; device identity is a generated UUID
+        BIND_NOTIFICATION_LISTENER_SERVICE - notification content deliberately excluded (§8.6)
+        BIND_ACCESSIBILITY_SERVICE        - would expose window titles/text content; prohibited
+        ACCESS_FINE_LOCATION / COARSE     - not part of this system
+        CAMERA, RECORD_AUDIO              - not part of this system
+    -->
+
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.TimeOS"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.TimeOS">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
