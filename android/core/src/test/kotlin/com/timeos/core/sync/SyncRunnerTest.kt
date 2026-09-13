@@ -51,6 +51,7 @@ private class FakeEventDao : EventDao {
 
     override suspend fun countAll() = events.size
     override suspend fun countUnsynced() = events.values.count { !it.synced }
+    override suspend fun countEligibleToSync() = events.values.count { !it.synced && it.batchId == null }
     override suspend fun pruneSyncedOlderThan(beforeMillis: Long) = 0
     override suspend fun deleteOldestSynced(count: Int) = 0
 }

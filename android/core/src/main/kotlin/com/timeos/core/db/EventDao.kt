@@ -42,6 +42,14 @@ interface EventDao {
     @Query("SELECT COUNT(*) FROM events WHERE synced = 0")
     suspend fun countUnsynced(): Int
 
+    /** Subset of [countUnsynced] that isn't tied up in a quarantined batch — i.e. events that
+     * will actually be picked up by the next sync cycle. The difference between the two counts
+     * is events permanently stuck in a quarantined batch (never auto-retried, see
+     * [SyncRunner][com.timeos.core.sync.SyncRunner]'s doc comment on why), which "unsynced"
+     * alone conflates with genuinely-pending work. */
+    @Query("SELECT COUNT(*) FROM events WHERE synced = 0 AND batchId IS NULL")
+    suspend fun countEligibleToSync(): Int
+
     /** §8.8 retention: unsynced rows are never deleted; synced rows are pruned 7 days after sync. */
     @Query("DELETE FROM events WHERE synced = 1 AND syncedAtMillis < :beforeMillis")
     suspend fun pruneSyncedOlderThan(beforeMillis: Long): Int

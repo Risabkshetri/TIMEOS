@@ -34,7 +34,12 @@ object SyncScheduler {
     }
 
     /** Manual "Sync now" trigger — still requires connectivity; WorkManager holds it until
-     * the constraint is satisfied rather than failing immediately when offline. */
+     * the constraint is satisfied rather than failing immediately when offline.
+     *
+     * Uses REPLACE, not KEEP: KEEP dedupes against the unique work name's PREVIOUS run even
+     * after it reached a terminal SUCCEEDED state, so every tap after the first silently
+     * short-circuited ("Status ... is SUCCEEDED ; not doing any work" in WM-WorkerWrapper logs)
+     * instead of actually invoking SyncWorker again. REPLACE always schedules a fresh run. */
     fun runNow(context: Context) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -44,7 +49,7 @@ object SyncScheduler {
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             IMMEDIATE_WORK_NAME,
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             request,
         )
     }

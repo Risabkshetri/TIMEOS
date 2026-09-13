@@ -78,6 +78,18 @@ class EventDaoInstrumentedTest {
     }
 
     @Test
+    fun countEligibleToSync_excludesBatchedEventsEvenThoughTheyAreStillUnsynced() = kotlinx.coroutines.runBlocking {
+        db.eventDao().insertAll(listOf(entity(1), entity(2), entity(3)))
+        db.eventDao().assignBatch(listOf("id-2"), "batch-x")
+
+        // id-2 is unsynced (not yet ACKED or QUARANTINED) but excluded from "eligible" because
+        // it's already claimed by a batch row — mirrors the real quarantine case where a batch's
+        // events stay assigned forever and must not be double-counted as sync-able.
+        assertEquals(3, db.eventDao().countUnsynced())
+        assertEquals(2, db.eventDao().countEligibleToSync())
+    }
+
+    @Test
     fun markBatchSynced_marksOnlyThatBatchsEvents() = kotlinx.coroutines.runBlocking {
         db.eventDao().insertAll(listOf(entity(1), entity(2)))
         db.eventDao().assignBatch(listOf("id-1"), "batch-a")

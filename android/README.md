@@ -2,18 +2,25 @@
 
 Target: Samsung Galaxy S24 FE (One UI), compileSdk/targetSdk 36, minSdk 29, Kotlin 2.1 + Compose.
 
-**Status: Phase 2 complete** (see `docs/TIMEOS_ENGINEERING_SPEC.md` §38). The app collects real
+**Status: Phase 3 complete** (see `docs/TIMEOS_ENGINEERING_SPEC.md` §38). The app collects real
 `UsageStatsManager` events via a 15-minute `WorkManager` poll into a Room database, and syncs them
-to a server over HTTP with batching, gzip, retry/backoff, and quarantine — all verified end-to-end
-on the physical S24 FE against `tools/mock_ingest_server.py` (no real backend exists yet; that's
-Phase 3). `INTERNET` is declared for the first time in Phase 2, for exactly this purpose.
+to a real FastAPI + PostgreSQL backend over HTTP with batching, gzip, retry/backoff, and
+quarantine. Verified end-to-end on the physical S24 FE against the real Dockerized backend: enrolled
+the device, synced real collected events, and confirmed in Postgres a contiguous `seq` range across
+multiple accepted batches with zero duplicate event ids.
 
-**Not yet done:** the 48-hour zero-loss/zero-duplication Definition of Done criterion needs longer
-unattended observation than a single session provides, and there's no real backend to sync against
-yet — device enrollment and the actual server are Phase 3.
+**Known artifact, not a bug:** 3 batches from early device testing (before the backend's
+`GZipRequestMiddleware` fix landed) are permanently `QUARANTINED` — by design (§27#12), quarantined
+batches are never auto-retried, so their events stay forever excluded from future sync attempts.
+The diagnostic screen's "Unsynced events (total)" figure includes these dead events; "Eligible to
+sync now" is the number that actually reflects what the next sync cycle will pick up.
 
-**Next: Phase 3** — backend ingestion (FastAPI `/v1/ingest/batch` matching the exact contract this
-client and the mock server already implement, device enrollment, PostgreSQL).
+**Not yet done:** the multi-day, zero-loss/zero-duplication Definition of Done criterion needs
+longer unattended observation than a single session provides — the periodic `CollectionWorker` and
+`SyncWorker` jobs are scheduled and running, so this accumulates passively going forward.
+
+**Next: Phase 4** — sessionization and deterministic analytics (turning raw events into sessions,
+coverage, activities, and `daily_metrics`).
 
 ## Modules
 

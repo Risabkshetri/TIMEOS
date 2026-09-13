@@ -68,6 +68,7 @@ fun DiagnosticScreen(deviceId: String) {
         val meta = db.syncMetaDao().get()
         syncStatus = SyncStatusUi(
             unsyncedCount = db.eventDao().countUnsynced(),
+            eligibleToSyncCount = db.eventDao().countEligibleToSync(),
             pendingBatches = db.syncBatchDao().pendingCount(),
             quarantinedBatches = db.syncBatchDao().quarantinedCount(),
             lastSyncAttemptAtMillis = meta?.lastSyncAttemptAtMillis,
@@ -147,6 +148,7 @@ fun DiagnosticScreen(deviceId: String) {
 
 private data class SyncStatusUi(
     val unsyncedCount: Int,
+    val eligibleToSyncCount: Int,
     val pendingBatches: Int,
     val quarantinedBatches: Int,
     val lastSyncAttemptAtMillis: Long?,
@@ -169,9 +171,10 @@ private fun SyncPanel(status: SyncStatusUi?, onRefresh: () -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
             .padding(16.dp),
     ) {
-        Text("Unsynced events: ${status?.unsyncedCount ?: 0}")
+        Text("Unsynced events (total, incl. dead-quarantined): ${status?.unsyncedCount ?: 0}")
+        Text("Eligible to sync now: ${status?.eligibleToSyncCount ?: 0}")
         Text("Pending batches: ${status?.pendingBatches ?: 0}")
-        Text("Quarantined batches: ${status?.quarantinedBatches ?: 0}")
+        Text("Quarantined batches (permanently dead, never retried): ${status?.quarantinedBatches ?: 0}")
         Text(
             "Last sync attempt: " +
                 (status?.lastSyncAttemptAtMillis?.let { timeFormat.format(Date(it)) } ?: "never"),
