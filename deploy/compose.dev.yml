@@ -1,0 +1,19 @@
+# Local development override: exposes api/dashboard directly on localhost and skips Caddy/TLS.
+#   docker compose -f compose.yml -f compose.dev.yml up -d
+#
+# Production uses compose.yml alone, fronted by Caddy (see Caddyfile and §29 of the spec).
+services:
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  api:
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  dashboard:
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  caddy:
+    profiles: ["production-only"]

@@ -1,0 +1,53 @@
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dashboard/next-env.d.ts
+npm-debug.log*
+
+# Android
+android/.gradle/
+android/*/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+
+# Browser extension
+extension/dist/
+extension/*.xpi
+extension/*.zip
+extension/node_modules/
+
+# Desktop agent
+desktop/__pycache__/
+desktop/.venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Docker / deploy
+deploy/*.log
+
+# Misc
+*.local

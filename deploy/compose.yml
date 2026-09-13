@@ -1,0 +1,76 @@
+name: timeos
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-timeos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-timeos}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-timeos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Deliberately NOT port-published to the host in any environment beyond local dev override
+    # (see docs/TIMEOS_ENGINEERING_SPEC.md §28: Postgres is reachable only on the internal network).
+
+  migrator:
+    build:
+      context: ../backend
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      TIMEOS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-timeos}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-timeos}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    environment:
+      TIMEOS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-timeos}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-timeos}
+      TIMEOS_ENVIRONMENT: ${TIMEOS_ENVIRONMENT:-production}
+      TIMEOS_AI_PROVIDER: ${TIMEOS_AI_PROVIDER:-null}
+      TIMEOS_AI_API_KEY: ${TIMEOS_AI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dashboard:
+    build:
+      context: ../dashboard
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - dashboard
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
