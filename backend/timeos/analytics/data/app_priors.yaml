@@ -1,0 +1,59 @@
+# L2 seed catalogue (§15.2): curated package -> category priors shipped with the app.
+#
+# `confidence` is deliberately kept in the 0.55-0.80 band the spec assigns to this layer — never
+# higher, since a seed guess about what a package is "usually" used for should always lose to a
+# real learned prior (L1) or user rule (L0) once one exists. Keys are android package names
+# exactly as they appear in a raw_events APP_FOREGROUND payload's "package" field; `category`
+# values must match a key in timeos/jobs/seed_categories.py's TAXONOMY.
+#
+# This is a starting point, not an exhaustive catalogue — an app missing here classifies as
+# Unknown (§15.2: "a success state, not a failure") until the user corrects it or enough
+# unprompted samples accumulate.
+
+com.android.chrome: {category: browsing, confidence: 0.60}
+com.brave.browser: {category: browsing, confidence: 0.60}
+org.mozilla.firefox: {category: browsing, confidence: 0.60}
+com.chrome.beta: {category: browsing, confidence: 0.60}
+com.opera.browser: {category: browsing, confidence: 0.60}
+
+com.whatsapp: {category: communication, confidence: 0.75}
+com.whatsapp.w4b: {category: communication, confidence: 0.75}
+com.facebook.orca: {category: communication, confidence: 0.72}
+com.google.android.gm: {category: communication, confidence: 0.72}
+com.google.android.apps.messaging: {category: communication, confidence: 0.72}
+com.slack: {category: communication, confidence: 0.68}
+com.microsoft.teams: {category: meetings, confidence: 0.65}
+us.zoom.videomeetings: {category: meetings, confidence: 0.70}
+com.discord: {category: communication, confidence: 0.60}
+
+com.facebook.katana: {category: social, confidence: 0.65}
+com.instagram.android: {category: social, confidence: 0.65}
+com.twitter.android: {category: social, confidence: 0.65}
+com.zhiliaoapp.musically: {category: social, confidence: 0.65}  # TikTok
+com.linkedin.android: {category: social, confidence: 0.55}
+
+com.google.android.youtube: {category: entertainment, confidence: 0.62}
+com.netflix.mediaclient: {category: entertainment, confidence: 0.75}
+com.spotify.music: {category: entertainment, confidence: 0.60}
+com.mxtech.videoplayer.ad: {category: entertainment, confidence: 0.65}
+com.google.android.apps.tachyon: {category: communication, confidence: 0.60}  # Google Meet/Duo
+
+com.github.android: {category: development, confidence: 0.70}
+com.google.android.apps.docs: {category: writing, confidence: 0.62}
+com.microsoft.office.word: {category: writing, confidence: 0.65}
+com.google.android.keep: {category: writing, confidence: 0.55}
+com.evernote: {category: writing, confidence: 0.55}
+
+com.google.android.apps.classroom: {category: learning, confidence: 0.65}
+com.duolingo: {category: learning, confidence: 0.70}
+com.audible.application: {category: learning, confidence: 0.60}
+com.amazon.kindle: {category: reading, confidence: 0.65}
+
+com.strava: {category: exercise, confidence: 0.70}
+com.google.android.apps.fitness: {category: exercise, confidence: 0.65}
+com.sec.android.app.shealth: {category: health, confidence: 0.60}
+
+com.android.settings: {category: admin, confidence: 0.65}
+com.android.vending: {category: admin, confidence: 0.55}
+com.google.android.googlequicksearchbox: {category: browsing, confidence: 0.55}
+com.google.android.apps.nbu.paisa.user: {category: admin, confidence: 0.60}  # Google Pay
