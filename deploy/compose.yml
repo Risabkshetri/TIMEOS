@@ -25,6 +25,9 @@ services:
     command: ["alembic", "upgrade", "head"]
     environment:
       TIMEOS_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-timeos}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-timeos}
+      # alembic/env.py builds its engine URL via get_settings(), which requires this field even
+      # though the migrator itself never signs a session — same root cause as the api service.
+      TIMEOS_SESSION_SECRET: ${TIMEOS_SESSION_SECRET:?set TIMEOS_SESSION_SECRET in .env}
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +41,7 @@ services:
       TIMEOS_ENVIRONMENT: ${TIMEOS_ENVIRONMENT:-production}
       TIMEOS_AI_PROVIDER: ${TIMEOS_AI_PROVIDER:-null}
       TIMEOS_AI_API_KEY: ${TIMEOS_AI_API_KEY:-}
+      TIMEOS_SESSION_SECRET: ${TIMEOS_SESSION_SECRET:?set TIMEOS_SESSION_SECRET in .env}
     depends_on:
       db:
         condition: service_healthy

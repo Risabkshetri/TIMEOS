@@ -21,6 +21,11 @@ _container: PostgresContainer | None = None
 
 def pytest_configure(config: pytest.Config) -> None:
     global _container
+    # timeos.config.Settings.session_secret_key has no default (§28: a hardcoded value would let
+    # every install forge every other install's sessions) — tests need *some* value, set before
+    # collection for the same reason TIMEOS_DATABASE_URL is set here rather than in a fixture.
+    os.environ.setdefault("TIMEOS_SESSION_SECRET", "test-only-session-secret-not-for-production")
+
     if os.environ.get("TIMEOS_SKIP_TESTCONTAINERS"):
         return  # allows running the non-DB unit tests without Docker available
 
@@ -93,11 +98,13 @@ def _reset_rate_limiters():
     design — they track real request history across the process's lifetime). Without a reset,
     any test suite with more than a handful of enroll/ingest calls trips the limiter purely from
     test volume, which is a test-isolation bug, not a product one."""
+    from timeos.api.auth import auth_rate_limiter
     from timeos.api.deps import ingest_rate_limiter
     from timeos.api.devices import enroll_rate_limiter
 
     ingest_rate_limiter.reset()
     enroll_rate_limiter.reset()
+    auth_rate_limiter.reset()
 
 
 @pytest.fixture

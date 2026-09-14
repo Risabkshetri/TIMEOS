@@ -13,6 +13,7 @@ from timeos.models.raw_event import RawEvent
 from timeos.models.seq_gap import SeqGap
 from timeos.models.sync_batch import SyncBatch
 from timeos.models.user import User
+from timeos.models.user_feedback import UserFeedback
 
 __all__ = [
     "Activity",
@@ -30,4 +31,5 @@ __all__ = [
     "SeqGap",
     "SyncBatch",
     "User",
+    "UserFeedback",
 ]

@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://timeos:timeos@localhost:5432/timeos"
     environment: str = "development"
 
+    # Signs dashboard session cookies (§25, §28) — no default, deliberately: a hardcoded value
+    # here would let every install on earth forge each other's session tokens. Env var is
+    # TIMEOS_SESSION_SECRET (env_prefix + this field's name).
+    session_secret: str
+
     # AI provider config (Phase 7/8). Absent by default -> NullProvider is used everywhere.
     ai_provider: str = "null"
     ai_api_key: str | None = None

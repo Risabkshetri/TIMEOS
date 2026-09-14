@@ -2,8 +2,8 @@
 
 Additional routers are wired in as their phases land:
   Phase 3  -> timeos.api.devices, timeos.api.ingest   (done)
-  Phase 4  -> timeos.api.days
-  Phase 6  -> timeos.api.goals, timeos.api.feedback
+  Phase 5  -> timeos.api.auth, timeos.api.days, timeos.api.feedback (stub)   (done)
+  Phase 6  -> timeos.api.goals; timeos.api.feedback gains real correction application
   Phase 7  -> timeos.api.privacy
   Phase 8  -> timeos.api.insights
 """
@@ -13,7 +13,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import select
 
+from timeos.api.auth import router as auth_router
+from timeos.api.days import router as days_router
 from timeos.api.devices import router as devices_router
+from timeos.api.feedback import router as feedback_router
 from timeos.api.gzip_request import GZipRequestMiddleware
 from timeos.api.health import router as health_router
 from timeos.api.ingest import router as ingest_router
@@ -34,9 +37,12 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="TimeOS API", version="0.3.0", lifespan=lifespan)
+app = FastAPI(title="TimeOS API", version="0.5.0", lifespan=lifespan)
 app.add_middleware(GZipRequestMiddleware)
 
 app.include_router(health_router)
 app.include_router(devices_router)
 app.include_router(ingest_router)
+app.include_router(auth_router)
+app.include_router(days_router)
+app.include_router(feedback_router)
