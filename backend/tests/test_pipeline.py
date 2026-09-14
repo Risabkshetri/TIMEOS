@@ -14,6 +14,7 @@ from timeos.models.app_session import AppSession
 from timeos.models.daily_metric import DailyMetric
 from timeos.models.device import Device
 from timeos.models.device_coverage import DeviceCoverage
+from timeos.models.focus_session import FocusSessionRow
 from timeos.models.raw_event import RawEvent
 from timeos.models.user import User
 
@@ -192,3 +193,30 @@ async def test_events_outside_the_day_window_are_excluded():
             .all()
         )
         assert sessions == []  # the chrome session belongs to the previous day, not this one
+
+
+async def test_recompute_day_persists_a_real_focus_session():
+    import timeos.db as db
+
+    async with db.async_session_factory() as session:
+        user, device = await _make_user_and_device(session)
+        # com.android.chrome is in the seed catalogue as "browsing" — a single 20-minute
+        # uninterrupted session clears §16's 15-minute focus threshold.
+        chrome = {"package": "com.android.chrome"}
+        session.add_all(
+            [
+                ev(device.id, user.id, 1, 0, "APP_FOREGROUND", chrome),
+                ev(device.id, user.id, 2, 20 * 60, "APP_BACKGROUND", chrome),
+            ]
+        )
+        await session.commit()
+
+        result = await recompute_day(session, user, LOCAL_DATE)
+        assert result.focus_session_count == 1
+        assert result.longest_focus_s == 20 * 60
+
+        focus_query = select(FocusSessionRow).where(FocusSessionRow.user_id == user.id)
+        rows = (await session.execute(focus_query)).scalars().all()
+        assert len(rows) == 1
+        assert rows[0].duration_s == 20 * 60
+        assert rows[0].interruption_count == 0

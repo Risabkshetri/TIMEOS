@@ -1,7 +1,7 @@
-"""Phase 4 pipeline: recomputes device_coverage/app_sessions/activities/daily_metrics/
-behavioral_patterns for one (user, local_date) from raw_events (§14's "delete-then-rewrite the
-affected window" rule — this makes recompute_day idempotent and safe to call again on a
-dirty day).
+"""Phase 4 pipeline: recomputes device_coverage/app_sessions/activities/focus_sessions/
+daily_metrics/behavioral_patterns for one (user, local_date) from raw_events (§14's
+"delete-then-rewrite the affected window" rule — this makes recompute_day idempotent and safe to
+call again on a dirty day).
 
 Scope note: coverage/screen-time/unlock-count are aggregated across a user's devices by SUMMING
 each device's independently-computed values. This is exactly correct with the single real device
@@ -49,6 +49,7 @@ from timeos.models.app_session import AppSession as AppSessionRow
 from timeos.models.behavioral_pattern import BehavioralPattern
 from timeos.models.daily_metric import DailyMetric
 from timeos.models.device_coverage import DeviceCoverage
+from timeos.models.focus_session import FocusSessionRow
 from timeos.models.raw_event import RawEvent
 from timeos.models.user import User
 
@@ -164,6 +165,21 @@ async def recompute_day(db: AsyncSession, user: User, local_date: date) -> Daily
     focus_sessions = build_focus_sessions(
         all_classified, deep_capable_categories=WORK_CATEGORY_KEYS
     )
+    for focus_session in focus_sessions:
+        db.add(
+            FocusSessionRow(
+                user_id=user.id,
+                category_id=category_key_to_id[focus_session.category_key],
+                start_ts=focus_session.start_ts,
+                end_ts=focus_session.end_ts,
+                duration_s=focus_session.duration_s,
+                interruption_count=focus_session.interruption_count,
+                tool_switch_count=focus_session.tool_switch_count,
+                attributed_ratio=focus_session.attributed_ratio,
+                is_deep_work=focus_session.is_deep_work,
+            )
+        )
+
     bursts = detect_distraction_burst(all_classified, WORK_CATEGORY_KEYS)
 
     metrics = compute_daily_metrics(
@@ -299,6 +315,13 @@ async def _clear_previous_computation(
             Activity.user_id == user_id,
             Activity.start_ts >= window_start,
             Activity.start_ts < window_end,
+        )
+    )
+    await db.execute(
+        delete(FocusSessionRow).where(
+            FocusSessionRow.user_id == user_id,
+            FocusSessionRow.start_ts >= window_start,
+            FocusSessionRow.start_ts < window_end,
         )
     )
 

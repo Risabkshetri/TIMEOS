@@ -25,6 +25,7 @@ from timeos.models.daily_metric import DailyMetric
 from timeos.models.device import Device
 from timeos.models.device_coverage import DeviceCoverage
 from timeos.models.dirty_day import DirtyDay
+from timeos.models.focus_session import FocusSessionRow
 from timeos.models.user import User
 from timeos.schemas.days import (
     AppSessionOut,
@@ -33,6 +34,8 @@ from timeos.schemas.days import (
     DailyMetricsOut,
     DayResponse,
     DeviceTimelineOut,
+    FocusResponse,
+    FocusSessionOut,
     TimelineResponse,
 )
 
@@ -148,3 +151,46 @@ async def get_day_timeline(
         )
 
     return TimelineResponse(local_date=local_date, devices=device_timelines)
+
+
+@router.get("/{local_date}/focus", response_model=FocusResponse)
+async def get_day_focus(
+    local_date: date_type,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> FocusResponse:
+    metrics = await _ensure_computed(db, user, local_date)
+
+    rows = (
+        (
+            await db.execute(
+                select(FocusSessionRow, ActivityCategory.key, ActivityCategory.label)
+                .join(ActivityCategory, ActivityCategory.id == FocusSessionRow.category_id)
+                .where(
+                    FocusSessionRow.user_id == user.id,
+                    FocusSessionRow.start_ts >= metrics.day_start_utc,
+                    FocusSessionRow.start_ts < metrics.day_end_utc,
+                )
+                .order_by(FocusSessionRow.start_ts)
+            )
+        )
+        .all()
+    )
+
+    return FocusResponse(
+        local_date=local_date,
+        sessions=[
+            FocusSessionOut(
+                category_key=key,
+                category_label=label,
+                start_ts=row.start_ts,
+                end_ts=row.end_ts,
+                duration_s=float(row.duration_s),
+                interruption_count=row.interruption_count,
+                tool_switch_count=row.tool_switch_count,
+                attributed_ratio=float(row.attributed_ratio),
+                is_deep_work=row.is_deep_work,
+            )
+            for row, key, label in rows
+        ],
+    )

@@ -83,3 +83,20 @@ class DeviceTimelineOut(BaseModel):
 class TimelineResponse(BaseModel):
     local_date: date
     devices: list[DeviceTimelineOut]
+
+
+class FocusSessionOut(BaseModel):
+    category_key: str
+    category_label: str
+    start_ts: datetime
+    end_ts: datetime
+    duration_s: float
+    interruption_count: int
+    tool_switch_count: int
+    attributed_ratio: float
+    is_deep_work: bool
+
+
+class FocusResponse(BaseModel):
+    local_date: date
+    sessions: list[FocusSessionOut]
