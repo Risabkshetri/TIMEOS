@@ -11,19 +11,26 @@ Additional routers are wired in as their phases land:
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import select
 
 from timeos.api.devices import router as devices_router
 from timeos.api.gzip_request import GZipRequestMiddleware
 from timeos.api.health import router as health_router
 from timeos.api.ingest import router as ingest_router
-from timeos.db import engine
+from timeos.db import async_session_factory, engine
 from timeos.jobs.partitions import ensure_partitions
+from timeos.jobs.seed_categories import ensure_system_categories
+from timeos.models.user import User
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     async with engine.begin() as conn:
         await ensure_partitions(conn)
+    async with async_session_factory() as session:
+        user_ids = (await session.execute(select(User.id))).scalars().all()
+        for user_id in user_ids:
+            await ensure_system_categories(session, user_id)
     yield
 
 
