@@ -27,4 +27,5 @@ class DeviceCoverage(Base):
     )
     start_ts: Mapped[datetime] = mapped_column(nullable=False)
     end_ts: Mapped[datetime] = mapped_column(nullable=False)
-    state: Mapped[str] = mapped_column(String(20), nullable=False)  # TRACKED|IDLE|UNOBSERVED|DEVICE_OFFLINE
+    # TRACKED|IDLE|UNOBSERVED|DEVICE_OFFLINE
+    state: Mapped[str] = mapped_column(String(20), nullable=False)

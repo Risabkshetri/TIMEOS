@@ -27,7 +27,9 @@ UNKNOWN = "unknown"
 # The categories a §15.2 L3 "followed by work" modifier accepts as evidence of work resuming.
 # Deliberately not all of §15.3's Work group (e.g. "admin" is chores, not the kind of engagement
 # that retroactively reclassifies preceding media as Learning).
-WORK_LIKE_CATEGORIES = frozenset({"deep_work", "focused_work", "development", "research", "writing"})
+WORK_LIKE_CATEGORIES = frozenset(
+    {"deep_work", "focused_work", "development", "research", "writing"}
+)
 
 # The categories a burst of entertainment-followed-by-work reclassifies *from*. Only categories
 # that are plausibly "background learning material" (video/audio) qualify — reclassifying, say,
@@ -56,8 +58,11 @@ class ClassificationResult:
 
 def load_seed_catalogue() -> dict[str, tuple[str, float]]:
     """Loads analytics/data/app_priors.yaml into {package: (category_key, confidence)}."""
-    raw = yaml.safe_load(resources.files("timeos.analytics.data").joinpath("app_priors.yaml").read_text())
-    return {pkg: (entry["category"], float(entry["confidence"])) for pkg, entry in (raw or {}).items()}
+    text = resources.files("timeos.analytics.data").joinpath("app_priors.yaml").read_text()
+    raw = yaml.safe_load(text)
+    return {
+        pkg: (entry["category"], float(entry["confidence"])) for pkg, entry in (raw or {}).items()
+    }
 
 
 def classify_session(
@@ -93,7 +98,9 @@ def classify_session(
             evidence.append("l3_followed_by_development")
 
     if confidence < CONFIDENCE_FLOOR:
-        return ClassificationResult(UNKNOWN, confidence, "unknown", tuple(evidence + ["l4_below_floor"]))
+        return ClassificationResult(
+            UNKNOWN, confidence, "unknown", tuple(evidence + ["l4_below_floor"])
+        )
 
     source = "context" if len(evidence) > 1 else "seed"
     return ClassificationResult(category_key, confidence, source, tuple(evidence))

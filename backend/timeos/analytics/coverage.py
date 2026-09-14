@@ -146,3 +146,52 @@ def coverage_ratio(intervals: list[CoverageInterval], window_seconds: float) -> 
         return 0.0
     observed = sum(i.duration_s for i in intervals if i.state in (TRACKED, IDLE))
     return observed / window_seconds
+
+
+def screen_on_seconds(
+    events: list[AnalyticsEvent],
+    window_start: datetime,
+    window_end: datetime,
+    poll_interval: timedelta = DEFAULT_POLL_INTERVAL,
+) -> float:
+    """Real screen-on duration within the window.
+
+    Deliberately separate from `build_coverage`'s TRACKED state, which (per §14.3's table)
+    covers BOTH "screen on, active" and "screen off/locked, collector alive" under the same
+    label — that conflation is correct for coverage_ratio's purpose (both are equally "observed")
+    but wrong for `daily_metrics.screen_time_s`, which needs to mean what it says.
+
+    An unterminated trailing SCREEN_ON (no SCREEN_OFF/DEVICE_LOCK before `window_end`) is capped
+    at `2 * poll_interval` past the last event, mirroring `build_coverage`'s own UNOBSERVED gap
+    rule — without this, a device that stops reporting for the rest of the day (collector killed,
+    battery died, sync simply never happened) would have its last known "on" moment silently
+    fabricate hours of screen time it never measured.
+    """
+    if window_end <= window_start:
+        return 0.0
+
+    total = 0.0
+    screen_on = False
+    since = window_start
+    last_event_ts = window_start
+
+    for event in sorted(events, key=lambda e: e.ts_utc):
+        if event.ts_utc < window_start or event.ts_utc > window_end:
+            continue
+        if screen_on:
+            total += (event.ts_utc - since).total_seconds()
+        last_event_ts = event.ts_utc
+        match event.type:
+            case "SCREEN_ON":
+                screen_on = True
+                since = event.ts_utc
+            case "SCREEN_OFF" | "DEVICE_LOCK":
+                screen_on = False
+                since = event.ts_utc
+            case _:
+                since = event.ts_utc if screen_on else since
+
+    if screen_on:
+        cap = min(window_end, last_event_ts + 2 * poll_interval)
+        total += (cap - since).total_seconds()
+    return total

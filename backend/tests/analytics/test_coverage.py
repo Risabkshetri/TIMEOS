@@ -106,7 +106,7 @@ def test_intervals_never_exceed_the_window_and_are_contiguous():
     intervals = build_coverage(events, T0, window_end)
     assert intervals[0].start_ts == T0
     assert intervals[-1].end_ts == window_end
-    for prev, nxt in zip(intervals, intervals[1:]):
+    for prev, nxt in zip(intervals, intervals[1:], strict=False):
         assert prev.end_ts == nxt.start_ts
 
 

@@ -23,6 +23,9 @@ out/
 dashboard/next-env.d.ts
 npm-debug.log*
 
+# Python / backend
+backend/build/
+
 # Android
 android/.gradle/
 android/*/build/

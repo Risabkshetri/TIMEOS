@@ -8,7 +8,7 @@ is what makes rule 3 (never extend an unterminated session to the present) enfor
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from timeos.analytics.types import AnalyticsEvent

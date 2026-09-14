@@ -39,6 +39,23 @@ def local_date_for_event(ts_utc_millis: int, tz_name: str, day_start_hour: int) 
     return (dt - timedelta(hours=day_start_hour)).date()
 
 
+def day_window_utc(
+    local_date: date, tz_name: str, day_start_hour: int
+) -> tuple[datetime, datetime]:
+    """The inverse of `local_date_for_event`: the [start, end) UTC instants bounding a local day.
+
+    Used by the Phase 4 pipeline (timeos/jobs/pipeline.py) to know which `raw_events` rows belong
+    to a given (user, local_date). Correct across a DST transition because it re-resolves the
+    local wall-clock time against the zone rather than adding a fixed 24h — a "day" that crosses
+    a spring-forward or fall-back boundary is legitimately 23 or 25 hours long.
+    """
+    tz = ZoneInfo(tz_name)
+    start = datetime(local_date.year, local_date.month, local_date.day, day_start_hour, tzinfo=tz)
+    next_date = local_date + timedelta(days=1)
+    end = datetime(next_date.year, next_date.month, next_date.day, day_start_hour, tzinfo=tz)
+    return start.astimezone(UTC), end.astimezone(UTC)
+
+
 async def ingest_batch(
     db: AsyncSession,
     device: Device,

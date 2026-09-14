@@ -14,7 +14,9 @@ from timeos.analytics.focus import (
 T0 = datetime(2026, 9, 14, 9, 0, 0, tzinfo=UTC)
 
 
-def cs(category: str, start_offset_s: float, duration_s: float, app_key: str | None = None) -> ClassifiedSession:
+def cs(
+    category: str, start_offset_s: float, duration_s: float, app_key: str | None = None
+) -> ClassifiedSession:
     start = T0 + timedelta(seconds=start_offset_s)
     return ClassifiedSession(
         app_key=app_key or category,
@@ -106,7 +108,9 @@ def test_deep_work_requires_forty_five_minutes_and_a_deep_capable_category():
     focus = build_focus_sessions(sessions, deep_capable_categories=frozenset({"development"}))
     assert focus[0].is_deep_work
 
-    focus_not_capable = build_focus_sessions(sessions, deep_capable_categories=frozenset({"writing"}))
+    focus_not_capable = build_focus_sessions(
+        sessions, deep_capable_categories=frozenset({"writing"})
+    )
     assert not focus_not_capable[0].is_deep_work
 
 
@@ -136,8 +140,11 @@ def test_deep_work_rejected_below_ninety_percent_attribution():
         (12, 0, 3600, 0, 1.0),  # max switching, zero focus, zero block size -> maximum
     ],
 )
-def test_fragmentation_index_boundaries(switches_per_hour, focused_s, work_s, median_block_min, expected):
-    assert fragmentation_index(switches_per_hour, focused_s, work_s, median_block_min) == pytest.approx(expected)
+def test_fragmentation_index_boundaries(
+    switches_per_hour, focused_s, work_s, median_block_min, expected
+):
+    actual = fragmentation_index(switches_per_hour, focused_s, work_s, median_block_min)
+    assert actual == pytest.approx(expected)
 
 
 def test_quality_score_matches_the_spec_formula_by_hand():

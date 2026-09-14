@@ -26,7 +26,9 @@ class AppClassification(Base):
     )
     app_key: Mapped[str] = mapped_column(String(255), primary_key=True)
     category_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("activity_categories.id", ondelete="RESTRICT"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("activity_categories.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     confidence: Mapped[float] = mapped_column(Numeric(4, 3), nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False)  # seed|learned|user

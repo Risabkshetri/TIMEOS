@@ -19,7 +19,9 @@ class ActivityCategory(Base):
     __tablename__ = "activity_categories"
     # Lets system-category seeding (timeos/jobs/seed_categories.py) use ON CONFLICT DO NOTHING
     # per user, so it's idempotent and safe to call on every startup like ensure_partitions().
-    __table_args__ = (UniqueConstraint("user_id", "key", name="uq_activity_categories_user_id_key"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "key", name="uq_activity_categories_user_id_key"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(

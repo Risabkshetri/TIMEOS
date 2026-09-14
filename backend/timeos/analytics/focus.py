@@ -70,7 +70,7 @@ def count_context_switches(sessions: list[ClassifiedSession]) -> tuple[int, int]
     same-category app change (IDE<->terminal) is a tool switch, counted separately (§16)."""
     context_switches = 0
     tool_switches = 0
-    for prev, nxt in zip(sessions, sessions[1:]):
+    for prev, nxt in zip(sessions, sessions[1:], strict=False):
         if prev.category_key != nxt.category_key:
             context_switches += 1
         elif prev.app_key != nxt.app_key:
@@ -115,7 +115,9 @@ def build_focus_sessions(
 
             gap_dur = timedelta(seconds=candidate.duration_s)
             too_long = gap_dur > INTERRUPT_TOLERANCE
-            clustered = interruption_ts and (candidate.start_ts - interruption_ts[-1]) < INTERRUPTION_CLUSTER_WINDOW
+            clustered = interruption_ts and (
+                candidate.start_ts - interruption_ts[-1] < INTERRUPTION_CLUSTER_WINDOW
+            )
             if too_long or clustered:
                 break  # breaks focus continuity per §16's interruption rule.
 

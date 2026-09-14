@@ -68,7 +68,10 @@ def detect_distraction_burst(
             right += 1
         window_sessions = non_work[left : right + 1]
         total = sum((s.duration_s for s in window_sessions), 0.0)
-        if len(window_sessions) >= DISTRACTION_BURST_MIN_SESSIONS and total >= DISTRACTION_BURST_MIN_TOTAL.total_seconds():
+        if (
+            len(window_sessions) >= DISTRACTION_BURST_MIN_SESSIONS
+            and total >= DISTRACTION_BURST_MIN_TOTAL.total_seconds()
+        ):
             occurrences.append(
                 PatternOccurrence(
                     pattern_type="DISTRACTION_BURST",
@@ -99,7 +102,8 @@ def detect_habitual_checking(sessions: list[ClassifiedSession]) -> list[PatternO
             right = left
             while (
                 right + 1 < n
-                and app_sessions[right + 1].start_ts - app_sessions[left].start_ts <= HABITUAL_CHECKING_WINDOW
+                and app_sessions[right + 1].start_ts - app_sessions[left].start_ts
+                <= HABITUAL_CHECKING_WINDOW
             ):
                 right += 1
             window_sessions = app_sessions[left : right + 1]
@@ -114,7 +118,11 @@ def detect_habitual_checking(sessions: list[ClassifiedSession]) -> list[PatternO
                         start_ts=window_sessions[0].start_ts,
                         end_ts=window_sessions[-1].end_ts,
                         strength=min(len(window_sessions) / (2 * HABITUAL_CHECKING_MIN_OPENS), 1.0),
-                        support={"app_key": app_key, "open_count": len(window_sessions), "median_s": median},
+                        support={
+                            "app_key": app_key,
+                            "open_count": len(window_sessions),
+                            "median_s": median,
+                        },
                     )
                 )
                 left = right + 1

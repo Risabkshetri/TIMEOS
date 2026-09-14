@@ -14,7 +14,9 @@ T0 = datetime(2026, 9, 14, 9, 0, 0, tzinfo=UTC)
 WORK = frozenset({"development", "writing"})
 
 
-def cs(category: str, start_offset_s: float, duration_s: float, app_key: str | None = None) -> ClassifiedSession:
+def cs(
+    category: str, start_offset_s: float, duration_s: float, app_key: str | None = None
+) -> ClassifiedSession:
     start = T0 + timedelta(seconds=start_offset_s)
     return ClassifiedSession(
         app_key=app_key or category,
@@ -61,7 +63,7 @@ def test_sessions_spread_beyond_fifteen_minutes_do_not_form_one_burst():
 
 
 def test_habitual_checking_needs_five_opens_and_low_median_duration():
-    sessions = [cs("social", i * 300, 10, "insta") for i in range(5)]  # 5 opens over 20 min, 10s each
+    sessions = [cs("social", i * 300, 10, "insta") for i in range(5)]  # 5 opens, 10s each, 20 min
     occurrences = detect_habitual_checking(sessions)
     assert len(occurrences) == 1
     assert occurrences[0].support["app_key"] == "insta"
@@ -122,7 +124,7 @@ def test_no_avoidance_when_work_resumes_within_thirty_minutes():
     sessions = [
         cs("development", 0, 25 * 60, "ide"),
         cs("social", 25 * 60 + 60, 15 * 60, "insta"),
-        cs("development", 25 * 60 + 60 + 15 * 60 + 10, 10 * 60, "ide"),  # resumes well inside 30 min
+        cs("development", 25 * 60 + 60 + 15 * 60 + 10, 10 * 60, "ide"),  # resumes inside 30 min
     ]
     assert detect_post_task_avoidance(sessions, WORK) == []
 
@@ -146,6 +148,6 @@ def test_no_avoidance_when_followup_is_too_brief():
 def test_no_avoidance_when_followup_starts_outside_the_three_minute_window():
     sessions = [
         cs("development", 0, 25 * 60, "ide"),
-        cs("social", 25 * 60 + 5 * 60, 15 * 60, "insta"),  # starts 5 min later, outside 3-min window
+        cs("social", 25 * 60 + 5 * 60, 15 * 60, "insta"),  # starts 5 min later, outside window
     ]
     assert detect_post_task_avoidance(sessions, WORK) == []

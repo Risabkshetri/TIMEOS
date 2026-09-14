@@ -84,7 +84,7 @@ def test_l4_confidence_below_floor_becomes_unknown():
 def test_l3_entertainment_followed_by_development_reclassifies_to_learning():
     # §15.2: "YouTube for 45 min followed within 15 min by >=30 min of Development -> Learning".
     yt = session("com.example.youtube", 0, 45 * 60)
-    dev = session("com.example.ide", yt.duration_s + 5 * 60, 35 * 60)  # starts 5 min after, within window
+    dev = session("com.example.ide", yt.duration_s + 5 * 60, 35 * 60)  # 5 min after, in window
     result = classify_session(
         yt,
         seed_catalogue=SEED,

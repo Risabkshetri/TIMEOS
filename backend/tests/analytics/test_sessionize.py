@@ -118,7 +118,11 @@ def test_user_interaction_increments_the_open_sessions_count():
 
 
 def test_user_interaction_with_no_open_session_is_a_noop():
-    events = [ev(0, "USER_INTERACTION"), ev(5, "APP_FOREGROUND", "com.a"), ev(65, "APP_BACKGROUND", "com.a")]
+    events = [
+        ev(0, "USER_INTERACTION"),
+        ev(5, "APP_FOREGROUND", "com.a"),
+        ev(65, "APP_BACKGROUND", "com.a"),
+    ]
     sessions = build_sessions(events)
     assert len(sessions) == 1
     assert sessions[0].interaction_count == 0

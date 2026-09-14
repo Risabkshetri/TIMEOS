@@ -93,7 +93,9 @@ TAXONOMY: list[tuple[str, str, bool, list[tuple[str, str, bool]]]] = [
 SYSTEM_LEAF_KEYS = frozenset({"idle", "unobserved", "offline", "unknown"})
 
 
-async def ensure_system_categories(session: AsyncSession, user_id: uuid.UUID) -> dict[str, uuid.UUID]:
+async def ensure_system_categories(
+    session: AsyncSession, user_id: uuid.UUID
+) -> dict[str, uuid.UUID]:
     """Ensures the full default taxonomy exists for `user_id`. Returns a key -> id map covering
     every category (top-level and child) so callers (e.g. the classifier) can resolve a key
     without a second round trip."""
@@ -107,10 +109,7 @@ async def ensure_system_categories(session: AsyncSession, user_id: uuid.UUID) ->
         .on_conflict_do_nothing(constraint="uq_activity_categories_user_id_key")
     )
 
-    result = await session.execute(
-        select(ActivityCategory.key, ActivityCategory.id).where(ActivityCategory.user_id == user_id)
-    )
-    key_to_id = dict(result.all())
+    key_to_id = await _load_key_to_id(session, user_id)
 
     child_rows = [
         {
@@ -131,10 +130,16 @@ async def ensure_system_categories(session: AsyncSession, user_id: uuid.UUID) ->
             .values(child_rows)
             .on_conflict_do_nothing(constraint="uq_activity_categories_user_id_key")
         )
-        result = await session.execute(
-            select(ActivityCategory.key, ActivityCategory.id).where(ActivityCategory.user_id == user_id)
-        )
-        key_to_id = dict(result.all())
+        key_to_id = await _load_key_to_id(session, user_id)
 
     await session.commit()
     return key_to_id
+
+
+async def _load_key_to_id(session: AsyncSession, user_id: uuid.UUID) -> dict[str, uuid.UUID]:
+    result = await session.execute(
+        select(ActivityCategory.key, ActivityCategory.id).where(
+            ActivityCategory.user_id == user_id
+        )
+    )
+    return dict(result.all())
