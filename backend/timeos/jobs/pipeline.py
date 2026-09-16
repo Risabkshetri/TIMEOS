@@ -25,7 +25,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from timeos.analytics.classify import LearnedPrior, classify_session, load_seed_catalogue
@@ -57,6 +57,40 @@ PIPELINE_VERSION = "4.0.0"
 
 
 async def recompute_day(db: AsyncSession, user: User, local_date: date) -> DailyMetric:
+    # Serializes concurrent recomputes of the SAME (user, date) — e.g. two dashboard pages
+    # loading at once, both finding no cached row yet. Without this, two overlapping delete-then-
+    # insert cycles can interleave (one's DELETE, then both INSERT the same coverage interval)
+    # and trip device_coverage's exclusion constraint with a real IntegrityError, caught live
+    # against the real dashboard.
+    #
+    # Deliberately NOT acquired via `db` (the ORM session passed in): this function calls
+    # ensure_system_categories, which commits internally, and SQLAlchemy releases a session's
+    # physical connection back to the pool on commit — with NullPool (used in tests) that means
+    # the underlying TCP connection actually closes, which makes Postgres drop any session-scoped
+    # advisory lock held on it automatically. A lock acquired on `db`'s connection would silently
+    # evaporate the moment ensure_system_categories commits, long before the real coverage/session
+    # work happens — caught by a concurrency regression test that still failed with the lock
+    # wired that way. Held instead on its own independent connection via `import timeos.db as
+    # db_module` (not a top-level `from timeos.db import engine`, which would capture a stale
+    # engine reference from before tests rebind it — see conftest.py's
+    # _use_nullpool_engine_for_tests) for this function's entire duration, so it's immune to
+    # whatever `db` does with its own transactions.
+    import timeos.db as db_module
+
+    lock_key = f"timeos.recompute_day:{user.id}:{local_date.isoformat()}"
+    async with db_module.engine.connect() as lock_conn:
+        await lock_conn.execute(
+            text("SELECT pg_advisory_lock(hashtext(:key)::bigint)"), {"key": lock_key}
+        )
+        try:
+            return await _recompute_day_locked(db, user, local_date)
+        finally:
+            await lock_conn.execute(
+                text("SELECT pg_advisory_unlock(hashtext(:key)::bigint)"), {"key": lock_key}
+            )
+
+
+async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) -> DailyMetric:
     window_start, window_end = day_window_utc(local_date, user.timezone, user.day_start_hour)
     category_key_to_id = await ensure_system_categories(db, user.id)
 

@@ -220,3 +220,45 @@ async def test_recompute_day_persists_a_real_focus_session():
         assert len(rows) == 1
         assert rows[0].duration_s == 20 * 60
         assert rows[0].interruption_count == 0
+
+
+async def test_concurrent_recompute_of_same_day_does_not_violate_coverage_exclusion_constraint():
+    """Regression: two near-simultaneous callers recomputing the same (user, local_date) — e.g.
+    two dashboard pages loading before either has a cached row — used to interleave their
+    delete-then-insert cycles and trip device_coverage's exclusion constraint with a real
+    IntegrityError. Each call here uses its OWN session, mirroring two separate HTTP requests."""
+    import asyncio
+
+    import timeos.db as db
+
+    async with db.async_session_factory() as setup_session:
+        user, device = await _make_user_and_device(setup_session)
+        chrome = {"package": "com.android.chrome"}
+        setup_session.add_all(
+            [
+                ev(device.id, user.id, 1, 0, "APP_FOREGROUND", chrome),
+                ev(device.id, user.id, 2, 20 * 60, "APP_BACKGROUND", chrome),
+            ]
+        )
+        await setup_session.commit()
+        user_id = user.id
+
+    async def run_once():
+        async with db.async_session_factory() as session:
+            fresh_user = await session.get(User, user_id)
+            return await recompute_day(session, fresh_user, LOCAL_DATE)
+
+    results = await asyncio.gather(run_once(), run_once())
+    assert all(r.local_date == LOCAL_DATE for r in results)
+
+    async with db.async_session_factory() as check_session:
+        coverage_query = select(DeviceCoverage).where(DeviceCoverage.device_id == device.id)
+        coverage_rows = (await check_session.execute(coverage_query)).scalars().all()
+        # Exactly one contiguous set of coverage rows, not doubled by the two racing calls.
+        assert len({(c.start_ts, c.end_ts, c.state) for c in coverage_rows}) == len(coverage_rows)
+
+        metrics_query = select(DailyMetric).where(
+            DailyMetric.user_id == user_id, DailyMetric.local_date == LOCAL_DATE
+        )
+        metrics_rows = (await check_session.execute(metrics_query)).scalars().all()
+        assert len(metrics_rows) == 1
