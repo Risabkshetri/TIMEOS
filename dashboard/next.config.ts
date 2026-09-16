@@ -11,10 +11,25 @@ import type { NextConfig } from "next";
 // go through this — they call BACKEND_INTERNAL_URL directly (see lib/api.ts).
 const BACKEND_URL = process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:8000";
 
+// §25/§28: "strict CSP" — the Content-Security-Policy header itself is set per-request by
+// middleware.ts (it needs a fresh nonce per request, which a static header here can't provide).
+// These are the headers that ARE fine to be static.
 const nextConfig: NextConfig = {
   output: "standalone",
   async rewrites() {
     return [{ source: "/v1/:path*", destination: `${BACKEND_URL}/v1/:path*` }];
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
   },
 };
 
