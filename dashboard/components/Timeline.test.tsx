@@ -116,6 +116,29 @@ describe("Timeline", () => {
 
     expect(screen.queryByTestId("timeline-sessions-row")).not.toBeInTheDocument();
   });
+
+  it("caps rendered sessions at 200 and notes how many were omitted (§25's failure case)", () => {
+    const manySessions = Array.from({ length: 250 }, (_, i) => ({
+      app_key: `com.example.app${i}`,
+      start_ts: interval(0, 0, "TRACKED").start_ts,
+      end_ts: interval(0, 0, "TRACKED").end_ts,
+      duration_s: 60,
+      interaction_count: 1,
+    }));
+
+    render(
+      <Timeline
+        deviceName="Test Phone"
+        dayStartUtc={DAY_START}
+        dayEndUtc={DAY_END}
+        coverage={ALL_FOUR_STATES}
+        sessions={manySessions}
+      />,
+    );
+
+    expect(screen.getAllByTestId("timeline-app-session")).toHaveLength(200);
+    expect(screen.getByText(/Showing the first 200 of 250 sessions/)).toBeInTheDocument();
+  });
 });
 
 describe("TimelineLegend", () => {

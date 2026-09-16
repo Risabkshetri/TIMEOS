@@ -19,6 +19,11 @@ const STATE_LABEL: Record<CoverageState, string> = {
   DEVICE_OFFLINE: "Device offline",
 };
 
+// §25's named failure case: ">200 sessions in a day (virtualise)". Coverage segments are few by
+// construction (a handful of state transitions a day) so only the session row can realistically
+// grow large; capped rather than virtualized for the same reason as the Where Time Went page.
+const MAX_RENDERED_SESSIONS = 200;
+
 function percentSpan(startIso: string, endIso: string, dayStartMs: number, dayEndMs: number) {
   const totalMs = Math.max(dayEndMs - dayStartMs, 1);
   const startMs = new Date(startIso).getTime() - dayStartMs;
@@ -73,7 +78,7 @@ export function Timeline({ deviceName, dayStartUtc, dayEndUtc, coverage, session
           className="relative h-6 w-full overflow-hidden rounded bg-neutral-50 dark:bg-neutral-900"
           data-testid="timeline-sessions-row"
         >
-          {sessions.map((session, i) => {
+          {sessions.slice(0, MAX_RENDERED_SESSIONS).map((session, i) => {
             const { leftPct, widthPct } = percentSpan(
               session.start_ts,
               session.end_ts,
@@ -92,6 +97,11 @@ export function Timeline({ deviceName, dayStartUtc, dayEndUtc, coverage, session
           })}
         </div>
       )}
+      {sessions.length > MAX_RENDERED_SESSIONS ? (
+        <span className="text-xs text-neutral-500">
+          Showing the first {MAX_RENDERED_SESSIONS} of {sessions.length} sessions.
+        </span>
+      ) : null}
     </div>
   );
 }
