@@ -22,6 +22,10 @@ node_modules/
 out/
 dashboard/next-env.d.ts
 npm-debug.log*
+*.tsbuildinfo
+playwright-report/
+test-results/
+dashboard/.env.local
 
 # Python / backend
 backend/build/

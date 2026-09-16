@@ -158,3 +158,78 @@ class TestGetFocus:
         assert sessions[0]["category_key"] == "browsing"
         assert sessions[0]["category_label"] == "Browsing"
         assert sessions[0]["duration_s"] == 20 * 60
+
+
+class TestGetActivities:
+    async def test_a_day_with_no_activities_returns_an_empty_list(self, client):
+        _user_id, password = await create_user_with_password()
+        await _login(client, password)
+        target_date = (datetime.now(UTC) - timedelta(days=1)).date()
+
+        resp = await client.get(f"/v1/days/{target_date.isoformat()}/activities")
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["activities"] == []
+
+    async def test_a_real_activity_resolves_its_app_key_via_source_session_ids(self, client):
+        import uuid
+
+        import timeos.db as db
+        from timeos.ingest.service import day_window_utc
+        from timeos.models.device import Device
+        from timeos.models.raw_event import RawEvent
+
+        user_id, password = await create_user_with_password()
+        target_date = (datetime.now(UTC) - timedelta(days=1)).date()
+        window_start, _window_end = day_window_utc(target_date, "UTC", 4)
+
+        async with db.async_session_factory() as session:
+            device = Device(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                name="Test Phone",
+                platform="android",
+                token_hash="irrelevant",
+            )
+            session.add(device)
+            await session.flush()
+            session.add_all(
+                [
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start,
+                        device_id=device.id,
+                        user_id=user_id,
+                        seq=1,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=0,
+                        type="APP_FOREGROUND",
+                        payload={"package": "com.android.chrome"},
+                        schema_v=1,
+                    ),
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start + timedelta(minutes=5),
+                        device_id=device.id,
+                        user_id=user_id,
+                        seq=2,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=300_000,
+                        type="APP_BACKGROUND",
+                        payload={"package": "com.android.chrome"},
+                        schema_v=1,
+                    ),
+                ]
+            )
+            await session.commit()
+
+        await _login(client, password)
+        resp = await client.get(f"/v1/days/{target_date.isoformat()}/activities")
+        assert resp.status_code == 200, resp.text
+        activities = resp.json()["activities"]
+        assert len(activities) == 1
+        assert activities[0]["category_key"] == "browsing"
+        assert activities[0]["app_keys"] == ["com.android.chrome"]
+        assert activities[0]["classification_source"] == "seed"
+        uuid.UUID(activities[0]["id"])  # a real, parseable activity id

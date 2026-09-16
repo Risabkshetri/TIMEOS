@@ -100,3 +100,20 @@ class FocusSessionOut(BaseModel):
 class FocusResponse(BaseModel):
     local_date: date
     sessions: list[FocusSessionOut]
+
+
+class ActivityOut(BaseModel):
+    id: str
+    category_key: str
+    category_label: str
+    app_keys: list[str]
+    start_ts: datetime
+    end_ts: datetime
+    duration_s: float
+    confidence: float
+    classification_source: str
+
+
+class ActivitiesResponse(BaseModel):
+    local_date: date
+    activities: list[ActivityOut]

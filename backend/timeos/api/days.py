@@ -28,6 +28,8 @@ from timeos.models.dirty_day import DirtyDay
 from timeos.models.focus_session import FocusSessionRow
 from timeos.models.user import User
 from timeos.schemas.days import (
+    ActivitiesResponse,
+    ActivityOut,
     AppSessionOut,
     CategoryBreakdown,
     CoverageIntervalOut,
@@ -192,5 +194,69 @@ async def get_day_focus(
                 is_deep_work=row.is_deep_work,
             )
             for row, key, label in rows
+        ],
+    )
+
+
+@router.get("/{local_date}/activities", response_model=ActivitiesResponse)
+async def get_day_activities(
+    local_date: date_type,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ActivitiesResponse:
+    """§15.4's correction unit: one row per `activities` entry, with the app_key(s) that made it
+    up resolved via `source_session_ids` — what the "Where Time Went" view's correction
+    affordance actually targets (not an app or a category, which have no single stable id)."""
+    metrics = await _ensure_computed(db, user, local_date)
+
+    rows = (
+        (
+            await db.execute(
+                select(Activity, ActivityCategory.key, ActivityCategory.label)
+                .join(ActivityCategory, ActivityCategory.id == Activity.category_id)
+                .where(
+                    Activity.user_id == user.id,
+                    Activity.start_ts >= metrics.day_start_utc,
+                    Activity.start_ts < metrics.day_end_utc,
+                )
+                .order_by(Activity.start_ts)
+            )
+        )
+        .all()
+    )
+
+    all_session_ids = {sid for activity, _k, _l in rows for sid in activity.source_session_ids}
+    app_keys_by_session_id: dict = {}
+    if all_session_ids:
+        session_rows = (
+            await db.execute(
+                select(AppSessionRow.id, AppSessionRow.app_key).where(
+                    AppSessionRow.id.in_(all_session_ids)
+                )
+            )
+        ).all()
+        app_keys_by_session_id = dict(session_rows)
+
+    return ActivitiesResponse(
+        local_date=local_date,
+        activities=[
+            ActivityOut(
+                id=str(activity.id),
+                category_key=key,
+                category_label=label,
+                app_keys=sorted(
+                    {
+                        app_keys_by_session_id[sid]
+                        for sid in activity.source_session_ids
+                        if sid in app_keys_by_session_id
+                    }
+                ),
+                start_ts=activity.start_ts,
+                end_ts=activity.end_ts,
+                duration_s=float(activity.duration_s),
+                confidence=float(activity.confidence),
+                classification_source=activity.classification_source,
+            )
+            for activity, key, label in rows
         ],
     )
