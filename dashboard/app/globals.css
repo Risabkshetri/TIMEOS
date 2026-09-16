@@ -1,3 +1,17 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* §25: UNOBSERVED must render as hatched grey, visually distinct from DEVICE_OFFLINE's solid
+   grey — both are "no real activity data", but one means "we don't know" and the other means
+   "we know it was off", and conflating them would silently relearn the 27-hour-day bug this
+   whole system exists to avoid (§14.3). */
+.timeline-hatched {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #9ca3af,
+    #9ca3af 4px,
+    #d1d5db 4px,
+    #d1d5db 8px
+  );
+}
