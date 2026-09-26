@@ -5,16 +5,14 @@ catalogue entry, neighbouring sessions) are passed in rather than fetched here, 
 testable without a database and reusable from both the pipeline and any future backfill tool.
 
 L0 (explicit user rule) and L1 (learned prior, >=5 samples) read from `app_classifications` rows
-the *caller* resolves — the correction loop that populates `source='user'`/`source='learned'`
-rows doesn't exist until Phase 6/7, so in practice every classification today falls through to
-L2/L3/L4. The layers are implemented now anyway: once Phase 6 lands, classifications immediately
-start respecting user corrections with no change to this module.
+the *caller* resolves. Phase 6's correction loop (timeos.api.feedback) is what actually populates
+`source='user'`/`source='learned'` rows now, via `bayesian_update_app_classification` below.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from importlib import resources
 
 import yaml
@@ -129,3 +127,61 @@ def _followed_by_work(
         work_duration += timedelta(seconds=other.duration_s)
 
     return started_within_window and work_duration >= FOLLOWED_BY_WORK_MIN_DURATION
+
+
+# §15.4's correction loop: "updates app_classifications (Bayesian update with a recency half-life
+# of 60 days)". The spec names the mechanism but not an exact formula (unlike, say, §16's focus
+# quality score) — this is this module's documented interpretation, kept in the same 0.75-0.95
+# confidence band L1 is defined to occupy (§15.2) and gated at the same >=5-sample threshold
+# classify_session already checks for L1 to take effect.
+RECENCY_HALF_LIFE_DAYS = 60.0
+LEARNED_CONFIDENCE_FLOOR = 0.75
+LEARNED_CONFIDENCE_CEILING = 0.95
+LEARNED_CONFIDENCE_STEP = 0.04  # reaches the ceiling at ~5 samples: 0.75 + 0.04*(5-1) = 0.91
+
+
+@dataclass(frozen=True, slots=True)
+class LearnedClassificationUpdate:
+    category_key: str
+    confidence: float
+    sample_count: int
+
+
+def bayesian_update_app_classification(
+    corrected_category_key: str,
+    existing: LearnedPrior | None,
+    existing_updated_at: datetime | None,
+    now: datetime | None = None,
+) -> LearnedClassificationUpdate:
+    """One correction's effect on an app's learned prior.
+
+    A correction that CONTRADICTS the existing learned category doesn't try to blend two
+    different categories' evidence into one number — it starts a fresh accumulation for the
+    corrected category. This is a direct correction, the strongest signal this system ever
+    receives about an app; treating it as one vote among a stale, differently-labelled history
+    would make the very case it's meant to fix (a wrong classification) the hardest one to
+    correct. Old evidence's effect on ALREADY-COMPUTED days is untouched either way — only
+    Phase 6's opt-in retroactive recompute changes history, never a classification update alone.
+    """
+    now = now or datetime.now(UTC)
+
+    if existing is None or existing.category_key != corrected_category_key:
+        return LearnedClassificationUpdate(corrected_category_key, LEARNED_CONFIDENCE_FLOOR, 1)
+
+    if existing_updated_at is None:
+        decayed_samples = 0.0
+    else:
+        days_elapsed = max((now - existing_updated_at).total_seconds() / 86400, 0.0)
+        decay = 0.5 ** (days_elapsed / RECENCY_HALF_LIFE_DAYS)
+        decayed_samples = existing.sample_count * decay
+
+    new_sample_count = decayed_samples + 1
+    confidence = min(
+        LEARNED_CONFIDENCE_CEILING,
+        LEARNED_CONFIDENCE_FLOOR + LEARNED_CONFIDENCE_STEP * (new_sample_count - 1),
+    )
+    # Rounds up: a decayed 4.2 "effective" samples plus this new one should read as 5 real
+    # corrections towards classify_session's own >=5 L1 threshold, not be floored back to 4.
+    return LearnedClassificationUpdate(
+        corrected_category_key, confidence, max(1, round(new_sample_count))
+    )

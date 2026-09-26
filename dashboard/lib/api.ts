@@ -30,3 +30,22 @@ export async function apiGet<T>(path: string): Promise<T> {
   }
   return res.json() as Promise<T>;
 }
+
+/** Like `apiGet`, but a 404 is an expected, navigable state (e.g. "no AI analysis for this date
+ * yet") rather than an error — returns `null` instead of throwing. */
+export async function apiGetOrNull<T>(path: string): Promise<T | null> {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    headers: { cookie: await cookieHeader() },
+    cache: "no-store",
+  });
+  if (res.status === 401) {
+    redirect("/login");
+  }
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(`GET ${path} failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json() as Promise<T>;
+}

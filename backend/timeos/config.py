@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     # AI provider config (Phase 7/8). Absent by default -> NullProvider is used everywhere.
     ai_provider: str = "null"
     ai_api_key: str | None = None
+    # None -> timeos.ai.provider.get_provider picks a small, cheap default model per provider.
+    ai_model: str | None = None
     ai_monthly_budget_usd: float = 5.0
 
 

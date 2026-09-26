@@ -8,6 +8,9 @@ const LINKS = [
   { href: "/timeline", label: "Timeline" },
   { href: "/where-time-went", label: "Where Time Went" },
   { href: "/focus", label: "Focus" },
+  { href: "/goals", label: "Goals" },
+  { href: "/insights", label: "Insights" },
+  { href: "/privacy", label: "Privacy" },
   { href: "/system-health", label: "System Health" },
 ];
 

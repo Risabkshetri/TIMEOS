@@ -3,7 +3,7 @@ import { CorrectionForm } from "@/components/CorrectionForm";
 import { DateNav } from "@/components/DateNav";
 import { apiGet } from "@/lib/api";
 import { formatDuration, formatTime, yesterdayIsoDate } from "@/lib/format";
-import type { ActivitiesResponse, DayResponse } from "@/lib/types";
+import type { ActivitiesResponse, CategoryOut, DayResponse } from "@/lib/types";
 
 // §25's named failure case: ">200 sessions in a day (virtualise)". A day with real personal-scale
 // usage rarely approaches this, so full list virtualization (react-window et al.) would be
@@ -19,10 +19,12 @@ export default async function WhereTimeWentPage({
   const { date } = await searchParams;
   const targetDate = date ?? yesterdayIsoDate();
 
-  const [{ categories }, { activities }] = await Promise.all([
+  const [{ categories }, { activities }, allCategories] = await Promise.all([
     apiGet<DayResponse>(`/v1/days/${targetDate}`),
     apiGet<ActivitiesResponse>(`/v1/days/${targetDate}/activities`),
+    apiGet<CategoryOut[]>("/v1/categories"),
   ]);
+  const correctableCategories = allCategories.filter((c) => !c.is_system);
 
   return (
     <div>
@@ -55,7 +57,11 @@ export default async function WhereTimeWentPage({
                   <td className="py-2">{activity.category_label}</td>
                   <td className="py-2 tabular-nums">{formatDuration(activity.duration_s)}</td>
                   <td className="py-2">
-                    <CorrectionForm activityId={activity.id} currentLabel={activity.category_label} />
+                    <CorrectionForm
+                      activityId={activity.id}
+                      currentLabel={activity.category_label}
+                      categories={correctableCategories}
+                    />
                   </td>
                 </tr>
               ))}

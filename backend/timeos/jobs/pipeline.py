@@ -49,6 +49,7 @@ from timeos.models.app_session import AppSession as AppSessionRow
 from timeos.models.behavioral_pattern import BehavioralPattern
 from timeos.models.daily_metric import DailyMetric
 from timeos.models.device_coverage import DeviceCoverage
+from timeos.models.dirty_day import DirtyDay
 from timeos.models.focus_session import FocusSessionRow
 from timeos.models.raw_event import RawEvent
 from timeos.models.user import User
@@ -88,6 +89,20 @@ async def recompute_day(db: AsyncSession, user: User, local_date: date) -> Daily
             await lock_conn.execute(
                 text("SELECT pg_advisory_unlock(hashtext(:key)::bigint)"), {"key": lock_key}
             )
+
+
+async def ensure_day_computed(db: AsyncSession, user: User, local_date: date) -> DailyMetric:
+    """The lazy-compute-on-read pattern timeos/api/days.py's read endpoints all share (see that
+    module's docstring for why there's no scheduled pipeline yet): reuse an up-to-date
+    `daily_metrics` row if one exists, recompute only when it's missing or `dirty_days` says
+    `local_date` changed since it was last computed. Factored out here (rather than staying
+    private to days.py) so §18's goal-alignment endpoint can ensure the same freshness guarantee
+    over a whole window without duplicating the dirty-check."""
+    existing = await db.get(DailyMetric, (user.id, local_date))
+    dirty = await db.get(DirtyDay, (user.id, local_date))
+    if existing is not None and dirty is None:
+        return existing
+    return await recompute_day(db, user, local_date)
 
 
 async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) -> DailyMetric:

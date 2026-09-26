@@ -132,3 +132,107 @@ export interface ActivitiesResponse {
   local_date: string;
   activities: ActivityOut[];
 }
+
+// Mirrors backend/timeos/schemas/categories.py.
+export interface CategoryOut {
+  id: string;
+  key: string;
+  label: string;
+  parent_id: string | null;
+  is_system: boolean;
+}
+
+// Mirrors backend/timeos/schemas/goals.py.
+export interface GoalMappingOut {
+  id: string;
+  category_id: string | null;
+  app_key: string | null;
+  weight: number;
+}
+
+export interface GoalOut {
+  id: string;
+  name: string;
+  priority: number;
+  target_minutes_per_week: number;
+  target_behavior: string | null;
+  active_from: string;
+  active_to: string | null;
+  archived: boolean;
+  mappings: GoalMappingOut[];
+}
+
+export interface ClassificationCorrectionResponse {
+  new_activity_id: string;
+  app_classification_source: string;
+  app_classification_confidence: number;
+  app_classification_sample_count: number;
+  retroactively_recomputed_dates: string[];
+}
+
+export interface GoalAlignmentOut {
+  label: string; // always "INFERENCE" — §18's mandatory honesty labelling
+  goal_id: string;
+  window_days: number;
+  target_minutes: number;
+  aligned_minutes: number;
+  range_low_minutes: number;
+  range_high_minutes: number;
+  attainment_ratio: number;
+  coverage_ratio: number;
+}
+
+// Mirrors backend/timeos/schemas/privacy.py.
+export interface PrivacyAuditEventOut {
+  id: string;
+  occurred_at: string;
+  actor: string;
+  allowlist_version: string;
+  ai_share_app_names: boolean;
+  field_count: number;
+  outcome: string;
+  rejected_fields: string[];
+  payload_sha256: string;
+}
+
+export interface PrivacyPreviewResponse {
+  date: string;
+  context: Record<string, unknown>;
+  payload_sha256: string;
+}
+
+// Mirrors backend/timeos/schemas/insights.py.
+export interface InsightOut {
+  id: string;
+  kind: string; // wins | problems | patterns | distractions | goal_alignment | recommendation
+  claim: string;
+  evidence: {
+    fields?: string[];
+    values?: Record<string, unknown>;
+    narrative?: string;
+    rationale?: string;
+    expected_effect?: string;
+    effort?: string;
+    measurable_check?: string;
+  };
+  confidence: number;
+  evidence_verified: boolean;
+  epistemic_status: string | null; // FACT | INFERENCE | HYPOTHESIS | null (recommendations)
+}
+
+export interface AnalysisOut {
+  id: string;
+  scope: string;
+  scope_key: string;
+  provider: string;
+  model: string;
+  day_score: number | null;
+  score_rationale: string | null;
+  summary: string | null;
+  overall_confidence: number | null;
+  data_caveats: string[];
+  tomorrow_priorities: string[];
+  validation_status: string; // ok | partial | failed
+  created_at: string;
+  insights: InsightOut[];
+}

@@ -14,12 +14,17 @@ from fastapi import FastAPI
 from sqlalchemy import select
 
 from timeos.api.auth import router as auth_router
+from timeos.api.categories import router as categories_router
 from timeos.api.days import router as days_router
 from timeos.api.devices import router as devices_router
 from timeos.api.feedback import router as feedback_router
+from timeos.api.goals import router as goals_router
 from timeos.api.gzip_request import GZipRequestMiddleware
 from timeos.api.health import router as health_router
 from timeos.api.ingest import router as ingest_router
+from timeos.api.insights import router as insights_router
+from timeos.api.privacy import router as privacy_router
+from timeos.api.working_hours import router as working_hours_router
 from timeos.db import async_session_factory, engine
 from timeos.jobs.partitions import ensure_partitions
 from timeos.jobs.seed_categories import ensure_system_categories
@@ -46,3 +51,8 @@ app.include_router(ingest_router)
 app.include_router(auth_router)
 app.include_router(days_router)
 app.include_router(feedback_router)
+app.include_router(goals_router)
+app.include_router(working_hours_router)
+app.include_router(categories_router)
+app.include_router(privacy_router)
+app.include_router(insights_router)

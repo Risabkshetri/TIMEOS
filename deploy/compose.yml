@@ -41,6 +41,8 @@ services:
       TIMEOS_ENVIRONMENT: ${TIMEOS_ENVIRONMENT:-production}
       TIMEOS_AI_PROVIDER: ${TIMEOS_AI_PROVIDER:-null}
       TIMEOS_AI_API_KEY: ${TIMEOS_AI_API_KEY:-}
+      TIMEOS_AI_MODEL: ${TIMEOS_AI_MODEL:-}
+      TIMEOS_AI_MONTHLY_BUDGET_USD: ${TIMEOS_AI_MONTHLY_BUDGET_USD:-5.0}
       TIMEOS_SESSION_SECRET: ${TIMEOS_SESSION_SECRET:?set TIMEOS_SESSION_SECRET in .env}
     depends_on:
       db:
@@ -57,6 +59,12 @@ services:
     build:
       context: ../dashboard
     restart: unless-stopped
+    environment:
+      # Without this, dashboard/lib/api.ts's server components fall back to 127.0.0.1:8000,
+      # which inside this container is itself, not the api service — every server-rendered page
+      # 500s with ECONNREFUSED. Caught by actually curling a dashboard page through this compose
+      # stack rather than only smoke-testing the API directly.
+      BACKEND_INTERNAL_URL: http://api:8000
     depends_on:
       - api
 

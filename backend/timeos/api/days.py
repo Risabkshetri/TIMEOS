@@ -17,14 +17,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from timeos.api.deps import get_current_user, get_db
-from timeos.jobs.pipeline import recompute_day
+from timeos.jobs.pipeline import ensure_day_computed
 from timeos.models.activity import Activity
 from timeos.models.activity_category import ActivityCategory
 from timeos.models.app_session import AppSession as AppSessionRow
-from timeos.models.daily_metric import DailyMetric
 from timeos.models.device import Device
 from timeos.models.device_coverage import DeviceCoverage
-from timeos.models.dirty_day import DirtyDay
 from timeos.models.focus_session import FocusSessionRow
 from timeos.models.user import User
 from timeos.schemas.days import (
@@ -44,21 +42,13 @@ from timeos.schemas.days import (
 router = APIRouter(prefix="/v1/days", tags=["days"])
 
 
-async def _ensure_computed(db: AsyncSession, user: User, local_date: date_type) -> DailyMetric:
-    existing = await db.get(DailyMetric, (user.id, local_date))
-    dirty = await db.get(DirtyDay, (user.id, local_date))
-    if existing is not None and dirty is None:
-        return existing
-    return await recompute_day(db, user, local_date)
-
-
 @router.get("/{local_date}", response_model=DayResponse)
 async def get_day(
     local_date: date_type,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> DayResponse:
-    metrics = await _ensure_computed(db, user, local_date)
+    metrics = await ensure_day_computed(db, user, local_date)
 
     category_rows = (
         await db.execute(
@@ -91,7 +81,7 @@ async def get_day_timeline(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TimelineResponse:
-    metrics = await _ensure_computed(db, user, local_date)
+    metrics = await ensure_day_computed(db, user, local_date)
 
     devices = (
         (await db.execute(select(Device).where(Device.user_id == user.id))).scalars().all()
@@ -161,7 +151,7 @@ async def get_day_focus(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FocusResponse:
-    metrics = await _ensure_computed(db, user, local_date)
+    metrics = await ensure_day_computed(db, user, local_date)
 
     rows = (
         (
@@ -207,7 +197,7 @@ async def get_day_activities(
     """§15.4's correction unit: one row per `activities` entry, with the app_key(s) that made it
     up resolved via `source_session_ids` — what the "Where Time Went" view's correction
     affordance actually targets (not an app or a category, which have no single stable id)."""
-    metrics = await _ensure_computed(db, user, local_date)
+    metrics = await ensure_day_computed(db, user, local_date)
 
     rows = (
         (

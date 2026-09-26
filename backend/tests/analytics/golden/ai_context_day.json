@@ -1,0 +1,72 @@
+{
+  "context_version": "1.0",
+  "scope": "day",
+  "date": "2026-09-13",
+  "weekday": "Sunday",
+  "data_quality": {
+    "coverage_ratio": 0.87,
+    "unknown_ratio": 0.12,
+    "devices_reporting": ["android", "desktop"],
+    "unobserved_minutes": 95,
+    "offline_minutes": 0,
+    "caveats": ["laptop unobserved 13:10-14:45"]
+  },
+  "totals": {
+    "day_minutes": 1440,
+    "observed_minutes": 1252,
+    "screen_minutes": 431,
+    "active_minutes": 388
+  },
+  "categories": [
+    {
+      "category": "Development",
+      "minutes": 186,
+      "share": 0.43,
+      "sessions": 22,
+      "avg_confidence": 0.88
+    }
+  ],
+  "focus": {
+    "sessions": 4,
+    "deep_sessions": 1,
+    "longest_minutes": 52,
+    "average_minutes": 24,
+    "total_focus_minutes": 96,
+    "avg_quality": 0.61,
+    "fragmentation_index": 0.58,
+    "context_switches": 47,
+    "switches_per_hour": 6.1,
+    "interruptions": 13
+  },
+  "time_of_day": [
+    { "slot": "09:00-12:00", "focus_minutes": 62, "distraction_minutes": 18 }
+  ],
+  "top_attention": [
+    { "rank": 1, "category": "Development", "bucket": "2-3h", "sessions": 22 }
+  ],
+  "goals": [
+    {
+      "name": "Build",
+      "priority": 1,
+      "target_weekly_minutes": 1200,
+      "aligned_minutes_today": 186,
+      "uncertainty": 28,
+      "week_attainment": 0.41
+    }
+  ],
+  "patterns": [
+    { "type": "POST_TASK_AVOIDANCE", "occurrences": 3, "strength": 0.66, "status": "confirmed" }
+  ],
+  "baselines": {
+    "window_days": 30,
+    "valid_days": 26,
+    "screen_minutes_mean": 452,
+    "deep_work_minutes_mean": 61,
+    "fragmentation_mean": 0.48,
+    "today_vs_mean": {
+      "screen_minutes": "-21",
+      "deep_work_minutes": "+9",
+      "fragmentation": "+0.10"
+    }
+  }
+}

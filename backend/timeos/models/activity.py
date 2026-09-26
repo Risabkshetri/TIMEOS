@@ -1,10 +1,11 @@
 """docs/TIMEOS_ENGINEERING_SPEC.md §13, §15: activities.
 
-`goal_id`/`goal_confidence` from the full §13 schema are deliberately omitted here — `goals`
-doesn't exist until Phase 6, and pointing a FK at a nonexistent table would be worse than adding
-the column when it's actually needed. `superseded_by` is self-referential and nullable: a
-correction (§15.4) never mutates or deletes a row, it inserts a new one and points the old row at
-it, so `activities` history is append-only even under correction.
+`goal_id`/`goal_confidence` (added in Phase 6, now that `goals` exists) record which goal, if
+any, this specific activity was attributed to and how confidently — a weak, nullable link (§13:
+"activities N-1 goals (weak, confidence-weighted)") since most activities align with no goal at
+all. `superseded_by` is self-referential and nullable: a correction (§15.4) never mutates or
+deletes a row, it inserts a new one and points the old row at it, so `activities` history is
+append-only even under correction.
 
 `source_session_ids` isn't in the spec's compact §13 schema listing, but the prose right below it
 ("app_sessions N-1 activities... preserving provenance") requires SOME join key between the two
@@ -54,3 +55,7 @@ class Activity(Base):
     superseded_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("activities.id", ondelete="SET NULL"), nullable=True
     )
+    goal_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("goals.id", ondelete="SET NULL"), nullable=True
+    )
+    goal_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3), nullable=True)
