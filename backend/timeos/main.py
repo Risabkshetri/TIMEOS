@@ -11,6 +11,7 @@ Additional routers are wired in as their phases land:
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
 from timeos.api.auth import router as auth_router
@@ -43,6 +44,12 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="TimeOS API", version="0.5.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"(chrome|moz)-extension://.*",
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
 app.add_middleware(GZipRequestMiddleware)
 
 app.include_router(health_router)

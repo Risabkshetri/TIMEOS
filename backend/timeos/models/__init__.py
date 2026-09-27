@@ -6,6 +6,7 @@ from timeos.models.app_classification import AppClassification
 from timeos.models.app_session import AppSession
 from timeos.models.base import Base
 from timeos.models.behavioral_pattern import BehavioralPattern
+from timeos.models.browser_session import BrowserSession
 from timeos.models.daily_metric import DailyMetric
 from timeos.models.device import Device
 from timeos.models.device_coverage import DeviceCoverage
@@ -31,6 +32,7 @@ __all__ = [
     "AppSession",
     "Base",
     "BehavioralPattern",
+    "BrowserSession",
     "DailyMetric",
     "Device",
     "DeviceCoverage",

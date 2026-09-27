@@ -64,6 +64,37 @@ class TestEnroll:
         resp = await client.post("/v1/devices/enroll", json=payload)
         assert resp.status_code == 422
 
+    async def test_browser_platform_requires_browser_family(self, client):
+        _, code = await create_user_with_enrollment_code()
+        payload = enroll_payload(uuid.uuid4(), code)
+        payload["platform"] = "browser"
+        resp = await client.post("/v1/devices/enroll", json=payload)
+        assert resp.status_code == 422
+
+    async def test_non_browser_platform_rejects_browser_family(self, client):
+        _, code = await create_user_with_enrollment_code()
+        payload = enroll_payload(uuid.uuid4(), code)
+        payload["browser_family"] = "firefox"
+        resp = await client.post("/v1/devices/enroll", json=payload)
+        assert resp.status_code == 422
+
+    async def test_an_invalid_browser_family_is_rejected(self, client):
+        _, code = await create_user_with_enrollment_code()
+        payload = enroll_payload(uuid.uuid4(), code)
+        payload["platform"] = "browser"
+        payload["browser_family"] = "safari"
+        resp = await client.post("/v1/devices/enroll", json=payload)
+        assert resp.status_code == 422
+
+    async def test_each_of_the_three_browser_families_enrolls_successfully(self, client):
+        for family in ["brave", "chromium", "firefox"]:
+            _, code = await create_user_with_enrollment_code()
+            payload = enroll_payload(uuid.uuid4(), code)
+            payload["platform"] = "browser"
+            payload["browser_family"] = family
+            resp = await client.post("/v1/devices/enroll", json=payload)
+            assert resp.status_code == 201, resp.text
+
 
 class TestTokenRotation:
     async def test_rotate_requires_valid_auth(self, client):

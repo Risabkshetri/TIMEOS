@@ -23,3 +23,7 @@ class AnalyticsEvent:
     @property
     def package(self) -> str | None:
         return self.payload.get("package")
+
+    @property
+    def domain(self) -> str | None:
+        return self.payload.get("domain")

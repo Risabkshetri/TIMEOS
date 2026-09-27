@@ -59,7 +59,7 @@ async def enroll(
         # Re-enrolling a previously revoked device: fresh token, cleared revocation.
         existing.name = body.name
         existing.platform = body.platform.value
-        existing.browser_family = body.browser_family
+        existing.browser_family = body.browser_family.value if body.browser_family else None
         existing.app_version = body.app_version
         existing.os_version = body.os_version
         existing.token_hash = token_hash
@@ -75,7 +75,7 @@ async def enroll(
                 user_id=code_row.user_id,
                 name=body.name,
                 platform=body.platform.value,
-                browser_family=body.browser_family,
+                browser_family=body.browser_family.value if body.browser_family else None,
                 app_version=body.app_version,
                 os_version=body.os_version,
                 token_hash=token_hash,

@@ -3,14 +3,21 @@ daily_metrics/behavioral_patterns for one (user, local_date) from raw_events (§
 "delete-then-rewrite the affected window" rule — this makes recompute_day idempotent and safe to
 call again on a dirty day).
 
-Scope note: coverage/screen-time/unlock-count are aggregated across a user's devices by SUMMING
-each device's independently-computed values. This is exactly correct with the single real device
-this system has today (the Android phone — desktop is deferred and the browser extension is
-Phase 9), but is NOT the true interval UNION §14.3 calls for when two devices are simultaneously
-tracked ("phone and laptop can be simultaneously TRACKED... day totals use the union of tracked
-intervals"). Implementing and testing that union against a scenario with no second device to
-verify it against would be guessing, not engineering — deferred until there's a real multi-device
-day to validate against, and flagged here rather than silently approximated.
+Scope note: coverage/screen-time/unlock-count are aggregated across a user's non-browser devices
+by SUMMING each device's independently-computed values (desktop is still deferred). This was
+exactly correct with a single real Android device and remains correct today because browser
+devices are excluded from this computation entirely (see the browser-session branch below) rather
+than summed in — but it is NOT the true interval UNION §14.3 calls for once a second non-browser
+device exists ("phone and laptop can be simultaneously TRACKED... day totals use the union of
+tracked intervals"). Implementing and testing that union against a scenario with no second device
+to verify it against would be guessing, not engineering — deferred until there's a real
+multi-device day to validate against, and flagged here rather than silently approximated.
+
+Browser devices (§38 Phase 9) are sessionized separately into `browser_sessions`, arbitrated
+across all of a user's browser devices at once (§11.4), but NOT yet folded into
+`device_coverage`/`activities`/`daily_metrics` — that merge is Phase 10's explicit job ("Unified
+Cross-Device Timeline"), matching this same module's own precedent of deferring true multi-device
+union until it can be built against a real scenario rather than guessed at.
 
 Pattern promotion (§17: "a pattern stays candidate until >=3 occurrences across >=3 distinct
 days") isn't given an exact matching key by the spec, so this module defines one: patterns are
@@ -28,6 +35,8 @@ from datetime import date, datetime
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from timeos.analytics.browser_arbitration import ArbitrationInterval, arbitrate_browser_sessions
+from timeos.analytics.browser_sessionize import build_browser_sessions
 from timeos.analytics.classify import LearnedPrior, classify_session, load_seed_catalogue
 from timeos.analytics.coverage import build_coverage, screen_on_seconds
 from timeos.analytics.distraction import (
@@ -47,7 +56,9 @@ from timeos.models.activity import Activity
 from timeos.models.app_classification import AppClassification
 from timeos.models.app_session import AppSession as AppSessionRow
 from timeos.models.behavioral_pattern import BehavioralPattern
+from timeos.models.browser_session import BrowserSession
 from timeos.models.daily_metric import DailyMetric
+from timeos.models.device import Device
 from timeos.models.device_coverage import DeviceCoverage
 from timeos.models.dirty_day import DirtyDay
 from timeos.models.focus_session import FocusSessionRow
@@ -137,11 +148,42 @@ async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) 
     device_ids = list(events_by_device.keys())
     await _clear_previous_computation(db, user.id, device_ids, window_start, window_end)
 
+    device_rows = (
+        (await db.execute(select(Device).where(Device.id.in_(device_ids))))
+        .scalars()
+        .all()
+        if device_ids
+        else []
+    )
+    devices_by_id = {d.id: d for d in device_rows}
+
     all_classified: list[ClassifiedSession] = []
     screen_time_s = 0.0
     unlock_count = 0
 
+    # Browser devices are sessionized and persisted separately (BrowserSession, not
+    # AppSession/Activity) — see browser_session.py's own docstring for why, and why this isn't
+    # yet folded into coverage/daily_metrics (Phase 10's job). A browser extension has no concept
+    # of "screen on/off" independent of the OS device it runs on, so running build_coverage/
+    # screen_on_seconds over its events would produce meaningless intervals, not just incomplete
+    # ones — they're skipped for those computations entirely, not summed in.
+    browser_intervals: list[ArbitrationInterval] = []
+
     for device_id, device_events in events_by_device.items():
+        device = devices_by_id.get(device_id)
+        if device is not None and device.platform == "browser":
+            for browser_session in build_browser_sessions(device_events):
+                browser_intervals.append(
+                    ArbitrationInterval(
+                        browser_family=device.browser_family or "unknown",
+                        domain=browser_session.domain,
+                        start_ts=browser_session.start_ts,
+                        end_ts=browser_session.end_ts,
+                        truncated=browser_session.truncated,
+                    )
+                )
+            continue
+
         coverage = build_coverage(device_events, window_start, window_end)
         for interval in coverage:
             db.add(
@@ -207,6 +249,28 @@ async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) 
                     evidence={"rules": list(result.evidence)},
                     devices=[str(device_id)],
                     source_session_ids=[app_session_row.id],
+                )
+            )
+
+    if browser_intervals:
+        # §11.4: arbitration runs ONCE across ALL browser devices for this user/day — it's
+        # inherently cross-device, unlike app-session building above which is per-device.
+        device_id_by_browser_family = {
+            d.browser_family: d.id
+            for d in devices_by_id.values()
+            if d.platform == "browser" and d.browser_family is not None
+        }
+        for arbitrated in arbitrate_browser_sessions(browser_intervals):
+            db.add(
+                BrowserSession(
+                    user_id=user.id,
+                    device_id=device_id_by_browser_family[arbitrated.browser_family],
+                    browser_family=arbitrated.browser_family,
+                    domain=arbitrated.domain,
+                    start_ts=arbitrated.start_ts,
+                    end_ts=arbitrated.end_ts,
+                    duration_s=(arbitrated.end_ts - arbitrated.start_ts).total_seconds(),
+                    truncated=arbitrated.truncated,
                 )
             )
 
@@ -357,6 +421,13 @@ async def _clear_previous_computation(
                 AppSessionRow.device_id.in_(device_ids),
                 AppSessionRow.start_ts >= window_start,
                 AppSessionRow.start_ts < window_end,
+            )
+        )
+        await db.execute(
+            delete(BrowserSession).where(
+                BrowserSession.device_id.in_(device_ids),
+                BrowserSession.start_ts >= window_start,
+                BrowserSession.start_ts < window_end,
             )
         )
     await db.execute(

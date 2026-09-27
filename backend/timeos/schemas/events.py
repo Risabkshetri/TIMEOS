@@ -33,6 +33,14 @@ class EventType(StrEnum):
     COLLECTOR_START = "COLLECTOR_START"
     COLLECTOR_STOP = "COLLECTOR_STOP"
     HEALTH = "HEALTH"
+    # §11.2/§38 Phase 9: a registrable domain gaining/losing §11.2's attribution condition (active
+    # tab, focused window, browser not idle). Deliberately separate from APP_FOREGROUND/BACKGROUND
+    # rather than reusing them with a "domain" payload key instead of "package" — a domain and an
+    # Android package are different provenance (§11.4: browser_sessions is its own table), and
+    # conflating their raw event types would make that boundary a payload-shape convention instead
+    # of a structural one.
+    DOMAIN_FOCUS_START = "DOMAIN_FOCUS_START"
+    DOMAIN_FOCUS_END = "DOMAIN_FOCUS_END"
 
 
 class IngestEvent(BaseModel):

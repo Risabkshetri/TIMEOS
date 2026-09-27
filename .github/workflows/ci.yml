@@ -65,3 +65,30 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Format check
+        run: npx prettier --check "src/**/*.{ts,tsx}"
+
+      # Builds both real targets (chrome-mv3, firefox-mv3) and asserts on the actual generated
+      # manifests — §11.2/§38 Phase 9: "A build-failing test asserts both manifests contain
+      # neither [host_permissions nor content scripts]."
+      - name: Test (includes real dual-target builds + manifest assertions)
+        run: npm test
