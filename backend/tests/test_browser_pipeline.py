@@ -157,7 +157,10 @@ async def test_recompute_day_is_idempotent_for_browser_sessions():
         assert len(rows) == 1
 
 
-async def test_a_browser_device_never_produces_app_sessions_or_activities():
+async def test_a_browser_device_never_produces_app_sessions_but_now_produces_an_activity():
+    # §38 Phase 10 supersedes Phase 9's "browser never produces an Activity" boundary: a browser
+    # domain is still never an AppSession (that stays Android-only provenance), but it IS now
+    # classified (via domain_priors.yaml) and clustered into the unified `activities` timeline.
     import timeos.db as db
 
     async with db.async_session_factory() as session:
@@ -180,7 +183,9 @@ async def test_a_browser_device_never_produces_app_sessions_or_activities():
             .all()
         )
         assert app_sessions == []
-        assert activities == []
+        assert len(activities) == 1
+        assert activities[0].devices == [str(brave.id)]
+        assert activities[0].classification_source == "seed"
 
 
 async def test_android_and_browser_devices_coexist_independently_on_the_same_day():
@@ -222,6 +227,59 @@ async def test_android_and_browser_devices_coexist_independently_on_the_same_day
             .scalars()
             .all()
         )
-        assert len(activities) == 1  # from the phone's chrome app session
+        # §38 Phase 10: two independent Activity rows, not one merged cross-device cluster — the
+        # phone's chrome app session and Brave's github.com domain session overlap in time but
+        # classify to DIFFERENT categories (browsing vs. development), and
+        # cluster_cross_device_activities only merges same-category activities across devices.
+        assert len(activities) == 2
         assert len(browser_sessions) == 1  # from Brave's github.com domain session
         assert browser_sessions[0].domain == "github.com"
+
+
+async def test_cross_device_activity_clusters_and_dual_device_s_reflects_real_overlap():
+    # §38 Phase 10's own headline case: a phone using a development-classified Android app
+    # (com.github.android) while a browser has a development-classified domain (github.com) in
+    # focus, overlapping in time — same category, different devices — should collapse into ONE
+    # cross-device Activity (union duration, not summed), and the day's dual_device_s should
+    # reflect the real overlap between the phone's real coverage and the browser's virtual one.
+    import timeos.db as db
+
+    async with db.async_session_factory() as session:
+        user = await _make_user(session)
+        phone = Device(
+            id=uuid.uuid4(), user_id=user.id, name="phone", platform="android", token_hash="x"
+        )
+        session.add(phone)
+        await session.flush()
+        brave = await _make_browser_device(session, user, "brave")
+
+        session.add_all(
+            [
+                ev(phone.id, user.id, 1, 0, "SCREEN_ON"),
+                ev(phone.id, user.id, 2, 5, "APP_FOREGROUND", {"package": "com.github.android"}),
+                ev(phone.id, user.id, 3, 305, "APP_BACKGROUND", {"package": "com.github.android"}),
+                # Overlaps the phone's [5, 305) session from t=50 to t=350.
+                ev(brave.id, user.id, 1, 50, "DOMAIN_FOCUS_START", {"domain": "github.com"}),
+                ev(brave.id, user.id, 2, 350, "DOMAIN_FOCUS_END", {"domain": "github.com"}),
+            ]
+        )
+        await session.commit()
+
+        daily_metric = await recompute_day(session, user, LOCAL_DATE)
+
+        activities = (
+            (await session.execute(select(Activity).where(Activity.user_id == user.id)))
+            .scalars()
+            .all()
+        )
+        assert len(activities) == 1
+        cluster = activities[0]
+        assert set(cluster.devices) == {str(phone.id), str(brave.id)}
+        assert len(cluster.source_session_ids) == 2
+        # Union of [5, 305) and [50, 350) is [5, 350) = 345s, not their sum (600s).
+        assert float(cluster.duration_s) == 345.0
+        assert "cross_device_members" in cluster.evidence
+
+        # The phone's real coverage and the browser's virtual coverage ([50, 350)) genuinely
+        # overlap — some positive dual_device_s, not the 0s a same-device-only union would give.
+        assert float(daily_metric.dual_device_s) > 0.0

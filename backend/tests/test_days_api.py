@@ -83,7 +83,213 @@ class TestGetTimeline:
 
         resp = await client.get(f"/v1/days/{target_date.isoformat()}/timeline")
         assert resp.status_code == 200, resp.text
-        assert resp.json()["devices"] == []
+        body = resp.json()
+        assert body["view"] == "per_device"
+        assert body["devices"] == []
+
+    async def test_unified_view_with_no_activities_returns_an_empty_list(self, client):
+        _user_id, password = await create_user_with_password()
+        await _login(client, password)
+        target_date = (datetime.now(UTC) - timedelta(days=1)).date()
+
+        resp = await client.get(f"/v1/days/{target_date.isoformat()}/timeline?view=unified")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["view"] == "unified"
+        assert body["unified"] == []
+
+    async def test_a_browser_device_now_appears_in_the_per_device_timeline(self, client):
+        # §38 Phase 10 fix: before this, a browser device had no DeviceCoverage/AppSession rows
+        # and was silently omitted from this endpoint entirely.
+        import uuid
+
+        import timeos.db as db
+        from timeos.ingest.service import day_window_utc
+        from timeos.models.device import Device
+        from timeos.models.raw_event import RawEvent
+
+        user_id, password = await create_user_with_password()
+        target_date = (datetime.now(UTC) - timedelta(days=1)).date()
+        window_start, _window_end = day_window_utc(target_date, "UTC", 4)
+
+        async with db.async_session_factory() as session:
+            brave = Device(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                name="Brave",
+                platform="browser",
+                browser_family="brave",
+                token_hash="irrelevant",
+            )
+            session.add(brave)
+            await session.flush()
+            session.add_all(
+                [
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start,
+                        device_id=brave.id,
+                        user_id=user_id,
+                        seq=1,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=0,
+                        type="DOMAIN_FOCUS_START",
+                        payload={"domain": "github.com"},
+                        schema_v=1,
+                    ),
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start + timedelta(minutes=10),
+                        device_id=brave.id,
+                        user_id=user_id,
+                        seq=2,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=600_000,
+                        type="DOMAIN_FOCUS_END",
+                        payload={"domain": "github.com"},
+                        schema_v=1,
+                    ),
+                ]
+            )
+            await session.commit()
+
+        await _login(client, password)
+        resp = await client.get(f"/v1/days/{target_date.isoformat()}/timeline")
+        assert resp.status_code == 200, resp.text
+        devices = resp.json()["devices"]
+        assert len(devices) == 1
+        assert devices[0]["device_id"] == str(brave.id)
+        assert devices[0]["sessions"] == [
+            {
+                "app_key": "github.com",
+                "start_ts": devices[0]["sessions"][0]["start_ts"],
+                "end_ts": devices[0]["sessions"][0]["end_ts"],
+                "duration_s": 600.0,
+                "interaction_count": 0,
+            }
+        ]
+        assert devices[0]["coverage"] == [
+            {
+                "start_ts": devices[0]["coverage"][0]["start_ts"],
+                "end_ts": devices[0]["coverage"][0]["end_ts"],
+                "state": "TRACKED",
+            }
+        ]
+
+    async def test_unified_view_returns_a_cross_device_clustered_activity(self, client):
+        import uuid
+
+        import timeos.db as db
+        from timeos.ingest.service import day_window_utc
+        from timeos.models.device import Device
+        from timeos.models.raw_event import RawEvent
+
+        user_id, password = await create_user_with_password()
+        target_date = (datetime.now(UTC) - timedelta(days=1)).date()
+        window_start, _window_end = day_window_utc(target_date, "UTC", 4)
+
+        async with db.async_session_factory() as session:
+            phone = Device(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                name="Phone",
+                platform="android",
+                token_hash="irrelevant",
+            )
+            brave = Device(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                name="Brave",
+                platform="browser",
+                browser_family="brave",
+                token_hash="irrelevant",
+            )
+            session.add_all([phone, brave])
+            await session.flush()
+            session.add_all(
+                [
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start,
+                        device_id=phone.id,
+                        user_id=user_id,
+                        seq=1,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=0,
+                        type="SCREEN_ON",
+                        payload={},
+                        schema_v=1,
+                    ),
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start + timedelta(seconds=5),
+                        device_id=phone.id,
+                        user_id=user_id,
+                        seq=2,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=5_000,
+                        type="APP_FOREGROUND",
+                        payload={"package": "com.github.android"},
+                        schema_v=1,
+                    ),
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start + timedelta(seconds=305),
+                        device_id=phone.id,
+                        user_id=user_id,
+                        seq=3,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=305_000,
+                        type="APP_BACKGROUND",
+                        payload={"package": "com.github.android"},
+                        schema_v=1,
+                    ),
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start + timedelta(seconds=50),
+                        device_id=brave.id,
+                        user_id=user_id,
+                        seq=1,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=50_000,
+                        type="DOMAIN_FOCUS_START",
+                        payload={"domain": "github.com"},
+                        schema_v=1,
+                    ),
+                    RawEvent(
+                        id=uuid.uuid4(),
+                        ts_utc=window_start + timedelta(seconds=350),
+                        device_id=brave.id,
+                        user_id=user_id,
+                        seq=2,
+                        tz_offset_min=0,
+                        tz_id="UTC",
+                        uptime_ms=350_000,
+                        type="DOMAIN_FOCUS_END",
+                        payload={"domain": "github.com"},
+                        schema_v=1,
+                    ),
+                ]
+            )
+            await session.commit()
+
+        await _login(client, password)
+        resp = await client.get(f"/v1/days/{target_date.isoformat()}/timeline?view=unified")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["view"] == "unified"
+        assert len(body["unified"]) == 1
+        activity = body["unified"][0]
+        assert activity["is_cross_device"] is True
+        assert set(activity["devices"]) == {str(phone.id), str(brave.id)}
+        assert activity["duration_s"] == 345.0
+        assert activity["category_key"] == "development"
 
 
 class TestGetFocus:

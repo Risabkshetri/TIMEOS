@@ -23,6 +23,7 @@ class DailyMetricsOut(BaseModel):
     unobserved_s: float
     offline_s: float
     coverage_ratio: float
+    dual_device_s: float
 
     screen_time_s: float
     active_time_s: float
@@ -80,9 +81,33 @@ class DeviceTimelineOut(BaseModel):
     sessions: list[AppSessionOut]
 
 
+class ActivityOut(BaseModel):
+    id: str
+    category_key: str
+    category_label: str
+    app_keys: list[str]
+    devices: list[str]
+    is_cross_device: bool
+    start_ts: datetime
+    end_ts: datetime
+    duration_s: float
+    confidence: float
+    classification_source: str
+
+
 class TimelineResponse(BaseModel):
+    """§38 Phase 10: `view=per_device` (the default, and this endpoint's original Phase 4/9 shape)
+    populates `devices` — one band per device, including browser devices now shown for the first
+    time (their `BrowserSession` rows adapted into the same `coverage`/`sessions` shape, domain as
+    `app_key`, coverage always TRACKED since a browser has no OS-level idle/offline signal).
+    `view=unified` instead populates `unified` — the already cross-device-clustered `activities`
+    rows (see `timeos.analytics.merge.cluster_cross_device_activities`), so a genuinely
+    simultaneous phone+laptop stretch of work renders as ONE band, not two overlapping ones."""
+
     local_date: date
-    devices: list[DeviceTimelineOut]
+    view: str
+    devices: list[DeviceTimelineOut] = []
+    unified: list[ActivityOut] = []
 
 
 class FocusSessionOut(BaseModel):
@@ -100,18 +125,6 @@ class FocusSessionOut(BaseModel):
 class FocusResponse(BaseModel):
     local_date: date
     sessions: list[FocusSessionOut]
-
-
-class ActivityOut(BaseModel):
-    id: str
-    category_key: str
-    category_label: str
-    app_keys: list[str]
-    start_ts: datetime
-    end_ts: datetime
-    duration_s: float
-    confidence: float
-    classification_source: str
 
 
 class ActivitiesResponse(BaseModel):

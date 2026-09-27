@@ -86,7 +86,18 @@ def compute_daily_metrics(
     focus_sessions: list[FocusSession],
     distraction_bursts: list[PatternOccurrence],
     unlock_count: int,
+    unified_coverage_ratio: float | None = None,
 ) -> DailyMetricsResult:
+    """`unified_coverage_ratio` (§38 Phase 10): the caller's cross-device union ratio (Android
+    coverage unioned with a browser's virtual coverage via `timeos.analytics.merge`), used ONLY
+    to decide the §14.3/§16 fragmentation-index gate. The `coverage_ratio` THIS function returns
+    stays the device-only figure computed from `coverage_intervals` — the caller overrides
+    observed_s/coverage_ratio on the persisted row with the real unified figures afterward. Kept
+    separate rather than folded into `coverage_intervals` itself because a browser's own coverage
+    is virtual (§38's own note: browsers have no OS-level screen-on/off signal, so its only honest
+    state is TRACKED, never IDLE/UNOBSERVED/OFFLINE) and would corrupt this function's per-state
+    tracked_s/idle_s/unobserved_s/offline_s breakdown, which stays Android-only by design.
+    """
     duration_seconds = (window_end - window_start).total_seconds()
 
     tracked_s = sum(i.duration_s for i in coverage_intervals if i.state == TRACKED)
@@ -95,6 +106,7 @@ def compute_daily_metrics(
     offline_s = sum(i.duration_s for i in coverage_intervals if i.state == DEVICE_OFFLINE)
     observed_s = tracked_s + idle_s
     ratio = observed_s / duration_seconds if duration_seconds > 0 else 0.0
+    gate_ratio = unified_coverage_ratio if unified_coverage_ratio is not None else ratio
 
     active_time_s = max(screen_time_s - idle_s, 0.0)
 
@@ -124,7 +136,7 @@ def compute_daily_metrics(
     interruptions = sum(f.interruption_count for f in focus_sessions)
 
     frag_index = None
-    if ratio >= COVERAGE_GATE_RATIO:
+    if gate_ratio >= COVERAGE_GATE_RATIO:
         work_sessions = [s for s in classified_sessions if s.category_key in WORK_CATEGORY_KEYS]
         median_work_block_min = (
             statistics.median(s.duration_s for s in work_sessions) / 60 if work_sessions else 0.0

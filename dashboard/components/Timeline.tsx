@@ -24,7 +24,7 @@ const STATE_LABEL: Record<CoverageState, string> = {
 // grow large; capped rather than virtualized for the same reason as the Where Time Went page.
 const MAX_RENDERED_SESSIONS = 200;
 
-function percentSpan(startIso: string, endIso: string, dayStartMs: number, dayEndMs: number) {
+export function percentSpan(startIso: string, endIso: string, dayStartMs: number, dayEndMs: number) {
   const totalMs = Math.max(dayEndMs - dayStartMs, 1);
   const startMs = new Date(startIso).getTime() - dayStartMs;
   const endMs = new Date(endIso).getTime() - dayStartMs;

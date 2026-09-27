@@ -63,6 +63,20 @@ def load_seed_catalogue() -> dict[str, tuple[str, float]]:
     }
 
 
+def load_domain_seed_catalogue() -> dict[str, tuple[str, float]]:
+    """§38 Phase 10: the L2 seed catalogue for browser telemetry. `classify_session` itself needs
+    no changes to classify a domain instead of an Android package — a `BrowserSession` is adapted
+    into an `AppSession`-shaped object with the domain as `app_key` before being classified (see
+    `timeos.jobs.pipeline`), and this catalogue is passed in wherever `load_seed_catalogue()`'s
+    app catalogue normally would be."""
+    text = resources.files("timeos.analytics.data").joinpath("domain_priors.yaml").read_text()
+    raw = yaml.safe_load(text)
+    return {
+        domain: (entry["category"], float(entry["confidence"]))
+        for domain, entry in (raw or {}).items()
+    }
+
+
 def classify_session(
     session: AppSession,
     *,

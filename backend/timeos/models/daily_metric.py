@@ -10,6 +10,15 @@ is below 0.6, and this column is what that check reads.
 for it when `coverage_ratio < 0.6`, per §16's "both are computed only on windows with
 coverage_ratio >= 0.6" — a NOT NULL default of 0 here would be indistinguishable from a real
 perfect-fragmentation-free day.
+
+`dual_device_s` (§38 Phase 10, §14.3): "Simultaneous phone + laptop use is itself a signal."
+Computed by `timeos.analytics.merge.merge_device_coverage` as the portion of the day where 2+
+devices (the phone's real coverage, and browser telemetry's own virtual coverage — see
+`timeos.jobs.pipeline`'s own comment on why a browser needs a synthesized coverage stream) were
+simultaneously observed. Also what makes `observed_s`/`coverage_ratio` on this row the TRUE
+cross-device union rather than each device's total summed — Phase 4-9's own `observed_s` was
+already documented as an approximation pending "a real multi-device day to validate against";
+this is that validation landing.
 """
 
 import uuid
@@ -73,6 +82,8 @@ class DailyMetric(Base):
     unlock_count: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)
     tz_transition: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
     revised: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
+
+    dual_device_s: Mapped[float] = mapped_column(_SECONDS, server_default="0", nullable=False)
 
     computed_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     pipeline_version: Mapped[str] = mapped_column(String(20), nullable=False)

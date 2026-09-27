@@ -14,6 +14,7 @@ export interface DailyMetrics {
   unobserved_s: number;
   offline_s: number;
   coverage_ratio: number;
+  dual_device_s: number;
 
   screen_time_s: number;
   active_time_s: number;
@@ -80,9 +81,15 @@ export interface DeviceTimeline {
   sessions: AppSessionOut[];
 }
 
+// §38 Phase 10: `view=per_device` populates `devices` (one band per device, including browser
+// devices now shown for the first time); `view=unified` instead populates `unified` — the
+// already cross-device-clustered `activities` rows, so a genuine phone+laptop overlap renders as
+// one band instead of two. See backend/timeos/schemas/days.py's TimelineResponse docstring.
 export interface TimelineResponse {
   local_date: string;
+  view: "per_device" | "unified";
   devices: DeviceTimeline[];
+  unified: ActivityOut[];
 }
 
 export interface FocusSessionOut {
@@ -121,6 +128,8 @@ export interface ActivityOut {
   category_key: string;
   category_label: string;
   app_keys: string[];
+  devices: string[];
+  is_cross_device: boolean;
   start_ts: string;
   end_ts: string;
   duration_s: number;

@@ -1,0 +1,49 @@
+# L2 seed catalogue for browser telemetry (§15.2, §38 Phase 10): curated registrable-domain ->
+# category priors, mirroring app_priors.yaml's format and confidence conventions exactly (0.55-
+# 0.80 band; a seed guess should always lose to a real learned prior or user rule once one
+# exists). Keys are registrable domains exactly as `extension/src/lib/psl.ts` reduces them —
+# never a full URL, never a subdomain distinct from its registrable domain.
+#
+# This is a starting point, not an exhaustive catalogue — a domain missing here classifies as
+# Unknown (§15.2: "a success state, not a failure") until the user corrects it or enough
+# unprompted samples accumulate.
+
+github.com: {category: development, confidence: 0.75}
+gitlab.com: {category: development, confidence: 0.75}
+stackoverflow.com: {category: development, confidence: 0.70}
+developer.mozilla.org: {category: research, confidence: 0.68}
+readthedocs.io: {category: research, confidence: 0.65}
+npmjs.com: {category: development, confidence: 0.65}
+pypi.org: {category: development, confidence: 0.65}
+vercel.com: {category: development, confidence: 0.60}
+herokuapp.com: {category: development, confidence: 0.55}
+localhost: {category: development, confidence: 0.55}
+
+docs.google.com: {category: writing, confidence: 0.60}
+notion.so: {category: writing, confidence: 0.60}
+overleaf.com: {category: writing, confidence: 0.65}
+
+mail.google.com: {category: communication, confidence: 0.72}
+outlook.com: {category: communication, confidence: 0.70}
+slack.com: {category: communication, confidence: 0.68}
+discord.com: {category: communication, confidence: 0.58}
+
+zoom.us: {category: meetings, confidence: 0.70}
+meet.google.com: {category: meetings, confidence: 0.70}
+teams.microsoft.com: {category: meetings, confidence: 0.65}
+
+facebook.com: {category: social, confidence: 0.65}
+instagram.com: {category: social, confidence: 0.65}
+twitter.com: {category: social, confidence: 0.60}
+x.com: {category: social, confidence: 0.60}
+reddit.com: {category: social, confidence: 0.55}
+linkedin.com: {category: social, confidence: 0.55}
+
+youtube.com: {category: entertainment, confidence: 0.60}
+netflix.com: {category: entertainment, confidence: 0.75}
+twitch.tv: {category: entertainment, confidence: 0.70}
+spotify.com: {category: entertainment, confidence: 0.55}
+
+wikipedia.org: {category: research, confidence: 0.60}
+google.com: {category: browsing, confidence: 0.55}
+amazon.com: {category: errands, confidence: 0.55}

@@ -6,6 +6,7 @@ from timeos.analytics.classify import (
     CONFIDENCE_FLOOR,
     LearnedPrior,
     classify_session,
+    load_domain_seed_catalogue,
     load_seed_catalogue,
 )
 from timeos.analytics.sessionize import AppSession
@@ -31,6 +32,30 @@ def test_load_real_seed_catalogue_has_expected_shape():
     category, confidence = catalogue["com.android.chrome"]
     assert category == "browsing"
     assert 0.55 <= confidence <= 0.80
+
+
+def test_load_real_domain_seed_catalogue_has_expected_shape():
+    catalogue = load_domain_seed_catalogue()
+    category, confidence = catalogue["github.com"]
+    assert category == "development"
+    assert 0.55 <= confidence <= 0.80
+
+
+def test_a_domain_classifies_via_classify_session_exactly_like_a_package():
+    # §38 Phase 10: classify_session needs no changes to classify a browser domain — a
+    # BrowserSession is adapted into an AppSession-shaped object (domain as app_key) before being
+    # classified, using the domain catalogue in place of the app catalogue.
+    domain_session = AppSession(
+        app_key="github.com",
+        start_ts=T0,
+        end_ts=T0 + timedelta(minutes=10),
+        interaction_count=0,
+    )
+    result = classify_session(
+        domain_session, seed_catalogue=load_domain_seed_catalogue()
+    )
+    assert result.category_key == "development"
+    assert result.source == "seed"
 
 
 def test_l0_user_rule_wins_terminally():

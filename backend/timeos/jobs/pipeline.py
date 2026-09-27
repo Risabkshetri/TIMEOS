@@ -4,20 +4,26 @@ daily_metrics/behavioral_patterns for one (user, local_date) from raw_events (§
 call again on a dirty day).
 
 Scope note: coverage/screen-time/unlock-count are aggregated across a user's non-browser devices
-by SUMMING each device's independently-computed values (desktop is still deferred). This was
-exactly correct with a single real Android device and remains correct today because browser
-devices are excluded from this computation entirely (see the browser-session branch below) rather
-than summed in — but it is NOT the true interval UNION §14.3 calls for once a second non-browser
-device exists ("phone and laptop can be simultaneously TRACKED... day totals use the union of
-tracked intervals"). Implementing and testing that union against a scenario with no second device
-to verify it against would be guessing, not engineering — deferred until there's a real
-multi-device day to validate against, and flagged here rather than silently approximated.
+by SUMMING each device's independently-computed values (desktop is still deferred). This is
+exactly correct with a single real Android device, and is now unioned rather than summed once a
+browser device is also present (§38 Phase 10, via `timeos.analytics.merge.merge_device_coverage`)
+— but still just summed across multiple simultaneous NON-browser devices (e.g. two Android
+phones), since there is still no real multi-Android-device day to validate that union against.
+Flagged here rather than silently approximated.
 
 Browser devices (§38 Phase 9) are sessionized separately into `browser_sessions`, arbitrated
-across all of a user's browser devices at once (§11.4), but NOT yet folded into
-`device_coverage`/`activities`/`daily_metrics` — that merge is Phase 10's explicit job ("Unified
-Cross-Device Timeline"), matching this same module's own precedent of deferring true multi-device
-union until it can be built against a real scenario rather than guessed at.
+across all of a user's browser devices at once (§11.4). §38 Phase 10 folds their result into the
+rest of the day: a synthesized TRACKED-only virtual coverage stream feeds the cross-device
+coverage union (`observed_s`/`coverage_ratio`/`dual_device_s` on `daily_metrics`), each arbitrated
+browser session is classified against `domain_priors.yaml` and contributes to `classified_sessions`
+(so browser time counts toward category-time totals like `communication_s`), and its resulting
+`DeviceActivity` is combined with Android's own per-session activities and run through
+`cluster_cross_device_activities` before `Activity` rows are persisted — so a genuinely
+cross-device stretch of work (phone + laptop, same category, overlapping or nearly so) becomes one
+`Activity` row spanning both devices instead of two independent ones. `focus_sessions`/distraction
+detection stay Android-only (see `cluster_cross_device_activities`' docstring and this function's
+own comments for why: focus/switch semantics assume one continuous stream of attention, and two
+concurrently-active devices are not a sequence).
 
 Pattern promotion (§17: "a pattern stays candidate until >=3 occurrences across >=3 distinct
 days") isn't given an exact matching key by the spec, so this module defines one: patterns are
@@ -37,8 +43,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from timeos.analytics.browser_arbitration import ArbitrationInterval, arbitrate_browser_sessions
 from timeos.analytics.browser_sessionize import build_browser_sessions
-from timeos.analytics.classify import LearnedPrior, classify_session, load_seed_catalogue
-from timeos.analytics.coverage import build_coverage, screen_on_seconds
+from timeos.analytics.classify import (
+    LearnedPrior,
+    classify_session,
+    load_domain_seed_catalogue,
+    load_seed_catalogue,
+)
+from timeos.analytics.coverage import TRACKED, CoverageInterval, build_coverage, screen_on_seconds
 from timeos.analytics.distraction import (
     PatternOccurrence,
     detect_distraction_burst,
@@ -47,6 +58,11 @@ from timeos.analytics.distraction import (
     detect_switch_storm,
 )
 from timeos.analytics.focus import ClassifiedSession, build_focus_sessions
+from timeos.analytics.merge import (
+    DeviceActivity,
+    cluster_cross_device_activities,
+    merge_device_coverage,
+)
 from timeos.analytics.metrics import WORK_CATEGORY_KEYS, compute_daily_metrics
 from timeos.analytics.sessionize import AppSession, build_sessions
 from timeos.analytics.types import AnalyticsEvent
@@ -161,12 +177,29 @@ async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) 
     screen_time_s = 0.0
     unlock_count = 0
 
+    # §38 Phase 10: activities are no longer persisted directly inside the per-device loop below.
+    # Each device (Android or browser) instead contributes `DeviceActivity` records to this list,
+    # which are combined and run through `cluster_cross_device_activities` AFTER both loops finish
+    # — same-category activities from different devices that overlap or nearly-abut (e.g. reading
+    # docs on the phone while coding on the laptop) collapse into one cross-device Activity row
+    # instead of two independent ones. `session_meta` carries the per-source-session
+    # classification_source/evidence/duration that `DeviceActivity` itself doesn't (it only knows
+    # what clustering needs), keyed by the originating app_session/browser_session id so the final
+    # persistence step can recover it once clustering has picked winners.
+    device_activities: list[DeviceActivity] = []
+    session_meta: dict[uuid.UUID, dict] = {}
+
+    # Real per-device coverage (Android only) for §38 Phase 10's cross-device union — keyed by
+    # str(device_id) to match `merge_device_coverage`'s dict-of-device-name shape.
+    android_coverage_by_device: dict[str, list[CoverageInterval]] = {}
+
     # Browser devices are sessionized and persisted separately (BrowserSession, not
-    # AppSession/Activity) — see browser_session.py's own docstring for why, and why this isn't
-    # yet folded into coverage/daily_metrics (Phase 10's job). A browser extension has no concept
-    # of "screen on/off" independent of the OS device it runs on, so running build_coverage/
-    # screen_on_seconds over its events would produce meaningless intervals, not just incomplete
-    # ones — they're skipped for those computations entirely, not summed in.
+    # AppSession) — see browser_session.py's own docstring for why. A browser extension has no
+    # concept of "screen on/off" independent of the OS device it runs on, so running
+    # build_coverage/screen_on_seconds over its events would produce meaningless intervals, not
+    # just incomplete ones — they're skipped for those computations entirely, not summed in. Its
+    # only honest coverage signal is "was some domain in focus" — a synthesized, TRACKED-only
+    # virtual coverage stream built below once arbitration has resolved cross-browser overlap.
     browser_intervals: list[ArbitrationInterval] = []
 
     for device_id, device_events in events_by_device.items():
@@ -194,6 +227,7 @@ async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) 
                     state=interval.state,
                 )
             )
+        android_coverage_by_device[str(device_id)] = coverage
         screen_time_s += screen_on_seconds(device_events, window_start, window_end)
         unlock_count += sum(1 for e in device_events if e.type == "DEVICE_UNLOCK")
 
@@ -237,20 +271,30 @@ async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) 
             db.add(app_session_row)
             await db.flush()
 
-            db.add(
-                Activity(
-                    user_id=user.id,
+            session_meta[app_session_row.id] = {
+                "classification_source": result.source,
+                "evidence": {"rules": list(result.evidence)},
+                "duration_s": session.duration_s,
+            }
+            device_activities.append(
+                DeviceActivity(
+                    device_id=device_id,
+                    category_key=result.category_key,
                     start_ts=session.start_ts,
                     end_ts=session.end_ts,
                     duration_s=session.duration_s,
-                    category_id=category_key_to_id[result.category_key],
                     confidence=result.confidence,
-                    classification_source=result.source,
-                    evidence={"rules": list(result.evidence)},
-                    devices=[str(device_id)],
-                    source_session_ids=[app_session_row.id],
+                    source_session_ids=(app_session_row.id,),
                 )
             )
+
+    # §38 Phase 10: the browser's own virtual coverage — TRACKED-only, built from POST-arbitration
+    # intervals so cross-browser-family overlap is already resolved and never double-counted here.
+    # Collapsed under one "browser" key (not per-device) because arbitration already guarantees no
+    # overlap *within* this stream, so there is nothing for `merge_device_coverage` to dedupe among
+    # a user's several browser devices — only between "browser" as a whole and each Android device.
+    browser_virtual_coverage: list[CoverageInterval] = []
+    domain_catalogue: dict[str, tuple[str, float]] | None = None
 
     if browser_intervals:
         # §11.4: arbitration runs ONCE across ALL browser devices for this user/day — it's
@@ -260,21 +304,116 @@ async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) 
             for d in devices_by_id.values()
             if d.platform == "browser" and d.browser_family is not None
         }
+        domain_catalogue = load_domain_seed_catalogue()
         for arbitrated in arbitrate_browser_sessions(browser_intervals):
-            db.add(
-                BrowserSession(
-                    user_id=user.id,
-                    device_id=device_id_by_browser_family[arbitrated.browser_family],
-                    browser_family=arbitrated.browser_family,
-                    domain=arbitrated.domain,
+            browser_session_row = BrowserSession(
+                user_id=user.id,
+                device_id=device_id_by_browser_family[arbitrated.browser_family],
+                browser_family=arbitrated.browser_family,
+                domain=arbitrated.domain,
+                start_ts=arbitrated.start_ts,
+                end_ts=arbitrated.end_ts,
+                duration_s=(arbitrated.end_ts - arbitrated.start_ts).total_seconds(),
+                truncated=arbitrated.truncated,
+            )
+            db.add(browser_session_row)
+            await db.flush()
+
+            browser_virtual_coverage.append(
+                CoverageInterval(arbitrated.start_ts, arbitrated.end_ts, TRACKED)
+            )
+
+            # §38 Phase 10: classify_session needs zero changes to classify a domain instead of an
+            # Android package (proven in tests/analytics/test_classify.py) — the domain is simply
+            # wrapped as an AppSession-shaped object and classified against the domain catalogue in
+            # place of the app catalogue. No L0/L1/L3 inputs: user rules and learned priors are
+            # keyed by Android app_key today, and L3's "followed by work" modifier is specific to
+            # entertainment app sessions, not browser domains.
+            domain_session = AppSession(
+                app_key=arbitrated.domain,
+                start_ts=arbitrated.start_ts,
+                end_ts=arbitrated.end_ts,
+                interaction_count=0,
+            )
+            result = classify_session(domain_session, seed_catalogue=domain_catalogue)
+            all_classified.append(
+                ClassifiedSession(
+                    app_key=arbitrated.domain,
+                    category_key=result.category_key,
                     start_ts=arbitrated.start_ts,
                     end_ts=arbitrated.end_ts,
-                    duration_s=(arbitrated.end_ts - arbitrated.start_ts).total_seconds(),
-                    truncated=arbitrated.truncated,
+                )
+            )
+            session_meta[browser_session_row.id] = {
+                "classification_source": result.source,
+                "evidence": {"rules": list(result.evidence)},
+                "duration_s": browser_session_row.duration_s,
+            }
+            device_activities.append(
+                DeviceActivity(
+                    device_id=device_id_by_browser_family[arbitrated.browser_family],
+                    category_key=result.category_key,
+                    start_ts=arbitrated.start_ts,
+                    end_ts=arbitrated.end_ts,
+                    duration_s=browser_session_row.duration_s,
+                    confidence=result.confidence,
+                    source_session_ids=(browser_session_row.id,),
                 )
             )
 
     all_classified.sort(key=lambda s: s.start_ts)
+
+    # §38 Phase 10: cluster same-category activities from different devices (phone + laptop as one
+    # work block) before persisting `Activity` rows — this is why activities were only *collected*
+    # as `DeviceActivity` above rather than written straight to the DB per device.
+    for cluster in cluster_cross_device_activities(device_activities):
+        dominant_id = max(
+            cluster.source_session_ids, key=lambda sid: session_meta[sid]["duration_s"]
+        )
+        dominant = session_meta[dominant_id]
+        evidence = dict(dominant["evidence"])
+        if cluster.is_cross_device:
+            # Free-form, additive to the dominant member's own evidence — classification_source
+            # itself stays one of classify_session's real values (never a made-up "cross_device"
+            # source), so a cross-device Activity's provenance reads the same as a single-device
+            # one, with this key as the only marker that other devices contributed.
+            evidence["cross_device_members"] = [
+                {
+                    "source_session_id": str(sid),
+                    "classification_source": session_meta[sid]["classification_source"],
+                }
+                for sid in cluster.source_session_ids
+                if sid != dominant_id
+            ]
+        db.add(
+            Activity(
+                user_id=user.id,
+                start_ts=cluster.start_ts,
+                end_ts=cluster.end_ts,
+                duration_s=cluster.duration_s,
+                category_id=category_key_to_id[cluster.category_key],
+                confidence=cluster.confidence,
+                classification_source=dominant["classification_source"],
+                evidence=evidence,
+                devices=[str(d) for d in cluster.device_ids],
+                source_session_ids=list(cluster.source_session_ids),
+            )
+        )
+
+    # §38 Phase 10: the true cross-device union of observed time — Android's own per-device
+    # coverage plus the browser's virtual (TRACKED-only) coverage stream. Never replaces the
+    # Android-only tracked_s/idle_s/unobserved_s/offline_s breakdown below (a browser has no
+    # equivalent of those states), only the day's overall observed_s/coverage_ratio and the new
+    # dual_device_s column.
+    unified_intervals_by_device = dict(android_coverage_by_device)
+    if browser_virtual_coverage:
+        unified_intervals_by_device["browser"] = browser_virtual_coverage
+    unified_coverage = merge_device_coverage(unified_intervals_by_device)
+    day_duration_s = (window_end - window_start).total_seconds()
+    unified_coverage_ratio = (
+        unified_coverage.observed_s / day_duration_s if day_duration_s > 0 else 0.0
+    )
+
     focus_sessions = build_focus_sessions(
         all_classified, deep_capable_categories=WORK_CATEGORY_KEYS
     )
@@ -307,6 +446,7 @@ async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) 
         focus_sessions=focus_sessions,
         distraction_bursts=bursts,
         unlock_count=unlock_count,
+        unified_coverage_ratio=unified_coverage_ratio,
     )
 
     all_occurrences = [
@@ -325,12 +465,16 @@ async def _recompute_day_locked(db: AsyncSession, user: User, local_date: date) 
         day_start_utc=window_start,
         day_end_utc=window_end,
         duration_seconds=metrics.duration_seconds,
-        observed_s=metrics.observed_s,
+        # observed_s/coverage_ratio are the §38 Phase 10 UNIFIED (Android + virtual browser)
+        # figures, not metrics.observed_s/coverage_ratio (device-only) — see merge.py/this
+        # function's own docstring for why the split exists.
+        observed_s=unified_coverage.observed_s,
         tracked_s=metrics.tracked_s,
         idle_s=metrics.idle_s,
         unobserved_s=metrics.unobserved_s,
         offline_s=metrics.offline_s,
-        coverage_ratio=metrics.coverage_ratio,
+        coverage_ratio=unified_coverage_ratio,
+        dual_device_s=unified_coverage.dual_device_s,
         screen_time_s=metrics.screen_time_s,
         active_time_s=metrics.active_time_s,
         deep_work_s=metrics.deep_work_s,
